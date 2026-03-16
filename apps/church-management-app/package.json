@@ -1,0 +1,9 @@
+{
+  "name": "@sfoacc/church-management-app",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "projectType": "application",
+    "tags": ["scope:church-management-app"]
+  }
+}
