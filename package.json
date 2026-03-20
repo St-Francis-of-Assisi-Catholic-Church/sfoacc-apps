@@ -8,11 +8,12 @@
   "dependencies": {
     "@sfoacc/sdk": "*",
     "@tanstack/react-query": "^5.62.0",
+    "lucide-react": "^0.469.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-router-dom": "6.30.3",
-    "sonner": "^1.7.2",
-    "lucide-react": "^0.469.0"
+    "recharts": "^3.8.0",
+    "sonner": "^1.7.2"
   },
   "devDependencies": {
     "@babel/core": "^7.14.5",

@@ -20,19 +20,19 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Church Management',
+    label: 'Church Units',
     items: [
       { path: '/admin/church-units', label: 'Church Units', icon: Building2 },
+    ],
+  },
+  {
+    label: 'Parish Life',
+    items: [
       { path: '/admin/parishioners', label: 'Parishioners', icon: Users },
       { path: '/admin/communities', label: 'Communities', icon: Users2 },
       { path: '/admin/societies', label: 'Societies', icon: BookMarked },
       { path: '/admin/events', label: 'Events', icon: Calendar },
       { path: '/admin/leadership', label: 'Leadership', icon: Crown },
-    ],
-  },
-  {
-    label: 'Sacraments',
-    items: [
       { path: '/admin/sacraments', label: 'Sacraments', icon: BookOpen },
     ],
   },
@@ -43,7 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'App Management',
+    label: 'Administration',
     items: [
       { path: '/admin/settings', label: 'App Settings', icon: Settings },
       { path: '/admin/users', label: 'User Management', icon: UserCog },
@@ -245,11 +245,15 @@ export default function AdminLayout() {
         </header>
 
         {/* Page content — Suspense here prevents sidebar from unmounting on page transitions */}
-        <main className="flex-1 overflow-hidden bg-background">
-          <div className="h-full flex flex-col p-6 max-w-7xl mx-auto overflow-hidden">
-            <Suspense fallback={<PageLoader />}>
-              <Outlet />
-            </Suspense>
+        <main className="flex-1 min-h-0 overflow-hidden bg-background">
+          {/* h-full + overflow-auto: scroll container at exact viewport height minus topbar */}
+          <div className="h-full overflow-auto p-6">
+            {/* h-full here = content area of the scrollable div; flex-col lets pages use flex-1 */}
+            <div className="h-full max-w-7xl mx-auto flex flex-col">
+              <Suspense fallback={<PageLoader />}>
+                <Outlet />
+              </Suspense>
+            </div>
           </div>
         </main>
       </div>

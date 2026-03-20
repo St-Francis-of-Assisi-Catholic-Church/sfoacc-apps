@@ -3,7 +3,7 @@ import { useSDK } from '../../contexts/SDKContext';
 import { UserCog, Plus, RefreshCw, Pencil, Trash2, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { toastApiError } from '../../utils/apiError';
-import { Button, Modal } from '../../components/ui';
+import { Button, Modal, PhoneInput } from '../../components/ui';
 import type { LeadershipRead, LeadershipCreate, LeadershipRole } from '@sfoacc/sdk';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -150,8 +150,7 @@ function LeadershipModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-foreground mb-1">Phone</label>
-            <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="+1 234 567 8900" className={inputCls} />
+            <PhoneInput value={form.phone} onChange={v => set('phone', v)} />
           </div>
           <div>
             <label className="block text-xs font-medium text-foreground mb-1">Email</label>

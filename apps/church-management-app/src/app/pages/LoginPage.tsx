@@ -88,9 +88,13 @@ type ChurchUnit = { id: number; name: string; type: string };
 // ── Main login page ───────────────────────────────────────────────────────────
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const client = useSDK();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) navigate('/dashboard', { replace: true });
+  }, [isAuthenticated, navigate]);
 
   const [step, setStep] = useState<Step>('identifier');
   const [identifier, setIdentifier] = useState('');

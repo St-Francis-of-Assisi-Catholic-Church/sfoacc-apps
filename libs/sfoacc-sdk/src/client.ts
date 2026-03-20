@@ -44,6 +44,8 @@ import type {
   User,
   UserCreate,
   UserUpdate,
+  ChurchUnitAssignment,
+  ChurchUnitSummary,
   RoleRead,
   RoleCreate,
   RoleUpdate,
@@ -54,6 +56,10 @@ import type {
   AppConfigUpdate,
   AuthConfigUpdate,
   PaginationParams,
+  EmergencyContactCreate,
+  EmergencyContactUpdate,
+  MedicalConditionCreate,
+  MedicalConditionUpdate,
 } from "./types";
 
 export class APIError extends Error {
@@ -71,15 +77,19 @@ export interface SFOACCClientConfig {
   baseUrl: string;
   /** Optional initial token */
   token?: string;
+  /** Called when the API returns a 401 (e.g. token expired) */
+  onUnauthorized?: () => void;
 }
 
 export class SFOACCClient {
   private baseUrl: string;
   private token: string | null;
+  private onUnauthorized?: () => void;
 
   constructor(config: SFOACCClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.token = config.token ?? null;
+    this.onUnauthorized = config.onUnauthorized;
   }
 
   setToken(token: string | null) {
@@ -108,6 +118,9 @@ export class SFOACCClient {
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       const detail = body?.detail ?? res.statusText;
+      if (res.status === 401) {
+        this.onUnauthorized?.();
+      }
       throw new APIError(res.status, detail);
     }
     return res.json() as Promise<T>;
@@ -537,6 +550,169 @@ export class SFOACCClient {
     );
   }
 
+  getParishionerLanguages(id: string): Promise<APIResponse<Array<{ id: number; name: string; description?: string | null }>>> {
+    return this.request(`/api/v1/parishioners/${id}/languages`);
+  }
+
+  assignParishionerLanguages(id: string, languageIds: number[]): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${id}/languages/assign`, {
+      method: "POST",
+      body: JSON.stringify({ language_ids: languageIds }),
+    });
+  }
+
+  removeParishionerLanguages(id: string, languageIds: number[]): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${id}/languages/remove`, {
+      method: "POST",
+      body: JSON.stringify({ language_ids: languageIds }),
+    });
+  }
+
+  listAvailableLanguages(): Promise<APIResponse<Array<{ id: number; name: string; description?: string | null }>>> {
+    return this.request("/api/v1/languages/available");
+  }
+
+  sendVerification(
+    parishionerId: string,
+    channel: "email" | "sms" | "both" = "both"
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/verify${this.buildQuery({ parishioner_id: parishionerId, channel })}`, {
+      method: "POST",
+    });
+  }
+
+  sendBulkMessage(data: {
+    parishioner_ids: string[];
+    channel?: "email" | "sms" | "both";
+    custom_message?: string | null;
+    template?: string;
+    subject?: string | null;
+  }): Promise<APIResponse<unknown>> {
+    return this.request("/api/v1/bulk-message/send", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateParishionerFamily(
+    id: string,
+    data: {
+      spouse_name?: string | null;
+      spouse_status?: string | null;
+      spouse_phone?: string | null;
+      father_name?: string | null;
+      father_status?: string | null;
+      mother_name?: string | null;
+      mother_status?: string | null;
+      children?: Array<{ name: string }> | null;
+    }
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${id}/family-info/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  createParishionerOccupation(
+    id: string,
+    data: { role: string; employer: string }
+  ): Promise<APIResponse<{ id: number; role: string; employer: string }>> {
+    return this.request(`/api/v1/parishioners/${id}/occupation`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateParishionerOccupation(
+    id: string,
+    data: { role?: string | null; employer?: string | null }
+  ): Promise<APIResponse<{ id: number; role: string; employer: string }>> {
+    return this.request(`/api/v1/parishioners/${id}/occupation`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  addParishionerSacrament(
+    id: string,
+    data: { sacrament_id: string; date_received?: string | null; place?: string | null; minister?: string | null; notes?: string | null }
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${id}/sacraments/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  batchAddParishionerEmergencyContacts(
+    parishionerId: string,
+    contacts: Array<{ name: string; relationship: string; primary_phone: string; alternative_phone?: string | null }>
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/emergency-contacts/batch`, {
+      method: 'POST',
+      body: JSON.stringify(contacts),
+    });
+  }
+
+  batchAddParishionerMedicalConditions(
+    parishionerId: string,
+    conditions: Array<{ condition: string; notes?: string | null }>
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/medical-conditions/batch`, {
+      method: 'POST',
+      body: JSON.stringify(conditions),
+    });
+  }
+
+  batchAddParishionerSacraments(
+    parishionerId: string,
+    sacraments: Array<{ sacrament_id: number; date_received?: string | null; place?: string | null; minister?: string | null; notes?: string | null }>
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/sacraments/batch`, {
+      method: 'POST',
+      body: JSON.stringify(sacraments),
+    });
+  }
+
+  batchAddParishionerSkills(
+    parishionerId: string,
+    skills: Array<{ name: string }>
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/skills/batch`, {
+      method: 'POST',
+      body: JSON.stringify(skills),
+    });
+  }
+
+  updateParishionerSacrament(
+    parishionerId: string,
+    sacramentRecordId: number,
+    data: { type?: string | null; date?: string | null; place?: string | null; minister?: string | null }
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/sacraments/${sacramentRecordId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteParishionerSacrament(parishionerId: string, sacramentRecordId: number): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/sacraments/${sacramentRecordId}`, {
+      method: "DELETE",
+    });
+  }
+
+  addParishionerSkill(id: string, name: string): Promise<APIResponse<{ id: number; name: string }>> {
+    return this.request(`/api/v1/parishioners/${id}/skills/`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  removeParishionerSkill(parishionerId: string, skillId: number): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/skills/${skillId}`, {
+      method: "DELETE",
+    });
+  }
+
   // ── Sacraments ────────────────────────────────────────────────────────────
 
   listSacraments(): Promise<APIResponse<unknown[]>> {
@@ -611,9 +787,188 @@ export class SFOACCClient {
 
   // ── Statistics ─────────────────────────────────────────────────────────────
 
-  /** Get parishioner statistics summary. */
-  getParishionerStats(): Promise<APIResponse<unknown>> {
-    return this.request("/api/v1/statistics/parishioners");
+  /** Get parishioner statistics summary, optionally filtered by church unit. */
+  getParishionerStats(params: { church_unit_id?: number } = {}): Promise<APIResponse<{
+    total_parishioners: number;
+    total_societies: number;
+    total_outstations: number;
+    total_church_communities: number;
+    parishioners_in_societies: number;
+    parishioners_without_society: number;
+    gender_distribution: Record<string, number>;
+    age_group_distribution: Record<string, number>;
+    marital_status_distribution: Record<string, number>;
+    sacraments_distribution: Record<string, number>;
+    society_distribution: Record<string, number>;
+    church_community_distribution: Record<string, number>;
+    outstation_distribution: Record<string, number>;
+    day_of_week_born_distribution: Record<string, number>;
+  }>> {
+    return this.request(`/api/v1/statistics/parishioners${this.buildQuery(params)}`);
+  }
+
+  /** Get system health status for all backend services. */
+  getSystemHealth(): Promise<{
+    status: string;
+    timestamp: string;
+    version: string;
+    environment: string;
+    services: Record<string, { status: string; latency_ms?: number; jobs?: Array<{ id: string; next_run: string }> }>;
+  }> {
+    return this.request("/api/v1/health");
+  }
+
+  /** Fetch the dynamic registration form schema (sections, fields, options). */
+  getRegistrationSchema(): Promise<{
+    message: string;
+    data: {
+      sections: Array<{
+        key: string;
+        label: string;
+        type: 'fields' | 'object' | 'repeatable_section' | 'tag_input' | 'multiselect';
+        description?: string;
+        max_items?: number;
+        fields?: Array<{
+          key: string;
+          label: string;
+          type: string;
+          required?: boolean;
+          default?: unknown;
+          min_length?: number;
+          max_length?: number;
+          placeholder?: string;
+          options?: Array<{ value: unknown; label: string; description?: string; once_only?: boolean; unit_type?: string }>;
+          conditional?: { field: string; value: unknown };
+          fields?: Array<{ key: string; label: string; type: string; required?: boolean; min_length?: number; max_length?: number }>;
+        }>;
+        field?: { key: string; label: string; type: string; required?: boolean };
+        options?: Array<{ value: number; label: string }>;
+        existing_options?: Array<{ value: number; label: string }>;
+        submit_as?: string;
+      }>;
+    };
+  }> {
+    return this.request('/api/v1/parishioners/registration-schema');
+  }
+
+  /** Get recent audit/activity log entries. */
+  getAuditLogs(params: { user_id?: string; method?: string; search?: string; skip?: number; limit?: number } = {}): Promise<APIResponse<PagedData<{
+    id: number;
+    user_id: string | null;
+    user_name: string;
+    method: string;
+    path: string;
+    status_code: number;
+    ip_address: string | null;
+    summary: string;
+    created_at: string;
+  }>>> {
+    return this.request(`/api/v1/admin/audit-logs${this.buildQuery(params)}`);
+  }
+
+  /** Registration stats — verification funnel + church ID coverage. */
+  getRegistrationStats(): Promise<APIResponse<{
+    total_parishioners: number;
+    total_verified: number;
+    total_pending_verification: number;
+    total_unverified: number;
+    total_with_new_church_id: number;
+    total_without_new_church_id: number;
+  }>> {
+    return this.request("/api/v1/statistics/registration");
+  }
+
+  /** System-level dashboard stats — hierarchy, mass services, users, communications. */
+  getDashboardSystemStats(): Promise<APIResponse<{
+    church_hierarchy: {
+      total_parishes: number;
+      total_outstations: number;
+      total_units: number;
+      active_units: number;
+      outstations: Array<{ id: number; name: string; is_active: boolean; parent: string }>;
+    };
+    mass_services: {
+      total_schedules: number;
+      active_schedules: number;
+      by_mass_type: Record<string, number>;
+      by_day_of_week: Record<string, number>;
+    };
+    users_and_access: {
+      total_users: number;
+      by_status: Record<string, number>;
+      by_role: Record<string, number>;
+      no_role_assigned: number;
+    };
+    communications: {
+      by_status: Record<string, number>;
+      total_recipients_reached: number;
+    };
+  }>> {
+    return this.request("/api/v1/statistics/dashboard/system");
+  }
+
+  /** Station-level dashboard stats — rich demographics, society/community/sacrament detail. */
+  getDashboardStationStats(churchUnitId?: number): Promise<APIResponse<{
+    scoped_to_unit_id: number | null;
+    overview: {
+      total_parishioners: number;
+      active: number;
+      deceased: number;
+      verified: number;
+      pending_verification: number;
+      unverified: number;
+      with_church_id: number;
+      without_church_id: number;
+      verification_rate_pct: number;
+      church_id_coverage_pct: number;
+    };
+    demographics: {
+      gender: Record<string, number>;
+      age_groups: {
+        total: Record<string, number>;
+        by_gender: Record<string, Record<string, number>>;
+      };
+      marital_status: {
+        total: Record<string, number>;
+        by_gender: Record<string, Record<string, number>>;
+      };
+      birth_day_of_week: {
+        total: Record<string, number>;
+        by_gender: Record<string, Record<string, number>>;
+      };
+    };
+    societies: {
+      total_societies: number;
+      parishioners_in_at_least_one_society: number;
+      parishioners_not_in_any_society: number;
+      society_coverage_pct: number;
+      by_society: Record<string, {
+        total_members: number;
+        by_gender: Record<string, number>;
+        by_membership_status: Record<string, number>;
+      }>;
+    };
+    church_communities: {
+      total_communities: number;
+      parishioners_without_community: number;
+      community_coverage_pct: number;
+      by_community: Record<string, {
+        total_members: number;
+        by_gender: Record<string, number>;
+        by_marital_status: Record<string, number>;
+      }>;
+    };
+    sacraments: Record<string, {
+      count: number;
+      percentage: number;
+      by_gender: Record<string, number>;
+      by_community: Record<string, number>;
+      by_age_group: Record<string, number>;
+    }>;
+    financials: { _note?: string };
+  }>> {
+    const headers: Record<string, string> = churchUnitId ? { 'X-Church-Unit-Id': String(churchUnitId) } : {};
+    return this.request("/api/v1/statistics/dashboard/station", { headers });
   }
 
   // ── Users ──────────────────────────────────────────────────────────────────
@@ -646,6 +1001,30 @@ export class SFOACCClient {
 
   deleteUser(id: string): Promise<APIResponse<null>> {
     return this.request(`/api/v1/user-management/${id}`, { method: "DELETE" });
+  }
+
+  getUserChurchUnits(userId: string): Promise<APIResponse<ChurchUnitSummary[]>> {
+    return this.request(`/api/v1/user-management/${userId}/church-units`);
+  }
+
+  assignUserChurchUnits(userId: string, assignments: ChurchUnitAssignment[]): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/user-management/${userId}/church-units`, {
+      method: "POST",
+      body: JSON.stringify(assignments),
+    });
+  }
+
+  replaceUserChurchUnits(userId: string, assignments: ChurchUnitAssignment[]): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/user-management/${userId}/church-units`, {
+      method: "PUT",
+      body: JSON.stringify(assignments),
+    });
+  }
+
+  removeUserChurchUnit(userId: string, unitId: number): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/user-management/${userId}/church-units/${unitId}`, {
+      method: "DELETE",
+    });
   }
 
   // ── Leadership ────────────────────────────────────────────────────────────
@@ -755,5 +1134,64 @@ export class SFOACCClient {
 
   deleteUnitEvent(unitId: number, id: number): Promise<APIResponse<null>> {
     return this.request(`/api/v1/parish/units/${unitId}/events/${id}`, { method: "DELETE" });
+  }
+
+  // ── Emergency Contacts ──────────────────────────────────────────────────────
+
+  addParishionerEmergencyContact(parishionerId: string, data: EmergencyContactCreate): Promise<APIResponse<{ id: number } & EmergencyContactCreate>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/emergency-contacts`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateParishionerEmergencyContact(parishionerId: string, contactId: number, data: EmergencyContactUpdate): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/emergency-contacts/${contactId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteParishionerEmergencyContact(parishionerId: string, contactId: number): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/emergency-contacts/${contactId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // ── Medical Conditions ───────────────────────────────────────────────────────
+
+  addParishionerMedicalCondition(parishionerId: string, data: MedicalConditionCreate): Promise<APIResponse<{ id: number; condition: string; notes?: string | null }>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/medical-conditions`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateParishionerMedicalCondition(parishionerId: string, conditionId: number, data: MedicalConditionUpdate): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/medical-conditions/${conditionId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteParishionerMedicalCondition(parishionerId: string, conditionId: number): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/parishioners/${parishionerId}/medical-conditions/${conditionId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // ── Reports ──────────────────────────────────────────────────────────────────
+
+  async downloadParishionerReport(parishionerId: string, format: 'pdf' | 'csv' = 'pdf'): Promise<Blob> {
+    const res = await fetch(`${this.baseUrl}/api/v1/parishioners/report?parishioner_id=${parishionerId}&format=${format}`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const detail = body?.detail ?? res.statusText;
+      if (res.status === 401) this.onUnauthorized?.();
+      throw new APIError(res.status, detail);
+    }
+    return res.blob();
   }
 }

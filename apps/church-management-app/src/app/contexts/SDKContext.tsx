@@ -6,14 +6,15 @@ const SDKContext = createContext<SFOACCClient | null>(null);
 interface SDKProviderProps {
   baseUrl: string;
   tokenKey?: string;
+  onUnauthorized?: () => void;
   children: ReactNode;
 }
 
-export function SDKProvider({ baseUrl, tokenKey = 'auth_token', children }: SDKProviderProps) {
+export function SDKProvider({ baseUrl, tokenKey = 'auth_token', onUnauthorized, children }: SDKProviderProps) {
   const client = useMemo(() => {
     const token = localStorage.getItem(tokenKey);
-    return new SFOACCClient({ baseUrl, token: token ?? undefined });
-  }, [baseUrl, tokenKey]);
+    return new SFOACCClient({ baseUrl, token: token ?? undefined, onUnauthorized });
+  }, [baseUrl, tokenKey, onUnauthorized]);
 
   return <SDKContext.Provider value={client}>{children}</SDKContext.Provider>;
 }

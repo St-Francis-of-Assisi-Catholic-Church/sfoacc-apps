@@ -29,12 +29,16 @@ type LoginMethod = 'otp' | 'password';
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function AdminLoginPage() {
-  const { login: adminLogin } = useAdminAuth();
+  const { login: adminLogin, isAuthenticated } = useAdminAuth();
   const { config } = useAppConfig();
   const shortName = config.church_code || config.name;
   const navigate = useNavigate();
 
   const client = useMemo(() => new SFOACCClient({ baseUrl: API_BASE_URL }), []);
+
+  useEffect(() => {
+    if (isAuthenticated) navigate('/admin/dashboard', { replace: true });
+  }, [isAuthenticated, navigate]);
 
   const [step, setStep] = useState<Step>('identifier');
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('otp');

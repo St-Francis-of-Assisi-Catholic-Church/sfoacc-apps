@@ -465,6 +465,19 @@ export interface UpdateMemberStatusRequest {
   status: MembershipStatus;
 }
 
+export interface ChurchUnitAssignment {
+  church_unit_id: number;
+  role_name?: string | null;
+}
+
+export interface ChurchUnitSummary {
+  id: number;
+  name: string;
+  type: string;
+  role?: string | null;
+  role_label?: string | null;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -475,6 +488,7 @@ export interface User {
   role_label?: string | null;
   church_unit_id?: number | null;
   church_unit_name?: string | null;
+  unit_memberships: ChurchUnitSummary[];
   status: UserStatus;
   created_at: string;
   updated_at: string;
@@ -489,6 +503,7 @@ export interface UserCreate {
   login_method?: LoginMethod | null;
   role_name?: string | null;
   church_unit_id?: number | null;
+  church_units?: ChurchUnitAssignment[] | null;
 }
 
 export type UserStatus = "active" | "disabled" | "reset_required";
@@ -702,8 +717,17 @@ export interface Parishioner {
 }
 
 export interface ParishionerDetailed extends Parishioner {
-  occupation?: { id: number; role: string; employer: string } | null;
-  family?: {
+  title?: string | null;
+  baptismal_name?: string | null;
+  nationality?: string | null;
+  is_deceased?: boolean | null;
+  date_of_death?: string | null;
+  photo_url?: string | null;
+  notes?: string | null;
+  occupation?: { id: number; role: string; employer: string; parishioner_id?: string } | null;
+  /** API returns this field as `family_info` */
+  family_info?: {
+    id?: number;
     spouse_name?: string | null;
     spouse_status?: string | null;
     spouse_phone?: string | null;
@@ -711,7 +735,7 @@ export interface ParishionerDetailed extends Parishioner {
     father_status?: string | null;
     mother_name?: string | null;
     mother_status?: string | null;
-    children?: Array<{ name: string }>;
+    children?: Array<{ name: string; id?: number }>;
   } | null;
   emergency_contacts: Array<{
     id: number;
@@ -724,13 +748,20 @@ export interface ParishionerDetailed extends Parishioner {
   skills: Array<{ id: number; name: string }>;
   sacraments: Array<{
     id: number;
-    sacrament: { id: number; type: string };
+    /** API returns `name` not `type` on the nested sacrament object */
+    sacrament: { id: number; name: string; description?: string | null; once_only?: boolean };
     date_received?: string | null;
     place?: string | null;
     minister?: string | null;
     notes?: string | null;
   }>;
-  societies: Array<{ id: number; name: string; date_joined?: string | null }>;
+  societies: Array<{ id: number; name: string; description?: string | null; date_joined?: string | null; membership_status?: string | null }>;
+  /** Languages embedded directly in the detailed response */
+  languages_spoken?: Array<{ id: number; name: string; description?: string | null }> | null;
+  /** Full church unit object */
+  church_unit?: { id: number; name: string; type?: string } | null;
+  /** Full church community object */
+  church_community?: { id: number; name: string; description?: string | null } | null;
 }
 
 export interface ParishionerFilters extends PaginationParams {

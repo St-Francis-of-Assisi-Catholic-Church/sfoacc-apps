@@ -7,3 +7,5 @@ export { NavItem } from './NavItem';
 export type { NavItemProps } from './NavItem';
 export { Modal } from './Modal';
 export type { ModalProps } from './Modal';
+export { PhoneInput } from './PhoneInput';
+export type { PhoneInputProps } from './PhoneInput';

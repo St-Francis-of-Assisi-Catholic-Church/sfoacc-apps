@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, X, ArrowUpDown, LayoutGrid, List, ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { ChurchUnitSelect } from './ChurchUnitSelect';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ interface FilterBarProps {
   onChange: (filters: FilterState) => void;
   statusOptions?: StatusOption[];
   churchUnitOptions?: StatusOption[];
+  /** Use the hierarchical ChurchUnitSelect instead of a flat options list */
+  hierarchicalChurchUnit?: boolean;
   sortOptions?: SortOption[];
   searchPlaceholder?: string;
   /** Show table/grid view toggle */
@@ -55,6 +58,7 @@ export function FilterBar({
   onChange,
   statusOptions,
   churchUnitOptions,
+  hierarchicalChurchUnit,
   sortOptions,
   searchPlaceholder = 'Search…',
   viewMode,
@@ -138,7 +142,17 @@ export function FilterBar({
         )}
 
         {/* Church unit filter */}
-        {churchUnitOptions && churchUnitOptions.length > 0 && (() => {
+        {hierarchicalChurchUnit && (
+          <div className="relative">
+            <ChurchUnitSelect
+              value={churchUnit}
+              onChange={v => setChurchUnit(v)}
+              className={`${SEL} min-w-[160px]`}
+            />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+          </div>
+        )}
+        {!hierarchicalChurchUnit && churchUnitOptions && churchUnitOptions.length > 0 && (() => {
           const hasGroups = churchUnitOptions.some(o => o.group);
           const groups = hasGroups
             ? [...new Set(churchUnitOptions.map(o => o.group ?? ''))]

@@ -2,21 +2,13 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSDK } from '../../contexts/SDKContext';
 import { Plus, RefreshCw, ShieldCheck, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Modal } from '../../components/ui';
+import { Button, Modal, PhoneInput } from '../../components/ui';
 import { toastApiError } from '../../utils/apiError';
-import type { User } from '@sfoacc/sdk';
+import type { User, RoleRead, ChurchUnitSummary } from '@sfoacc/sdk';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 20;
-
-const ROLES = [
-  { value: 'super_admin', label: 'Super Admin' },
-  { value: 'parish_admin', label: 'Parish Admin' },
-  { value: 'church_administrator', label: 'Church Administrator' },
-  { value: 'church_secretary', label: 'Church Secretary' },
-  { value: 'data_entry', label: 'Data Entry' },
-];
 
 // plum = #8e3168  cyan-brand = #4cb8d7  gold = golden token
 const ROLE_COLORS: Record<string, string> = {
@@ -53,7 +45,7 @@ interface UserForm {
   email: string;
   phone: string;
   role_name: string;
-  church_unit_id: string;
+  church_unit_ids: number[];
   status: string;
 }
 
@@ -62,7 +54,7 @@ const EMPTY_FORM: UserForm = {
   email: '',
   phone: '',
   role_name: '',
-  church_unit_id: '',
+  church_unit_ids: [],
   status: 'active',
 };
 
@@ -72,7 +64,7 @@ function formFromUser(u: User): UserForm {
     email: u.email ?? '',
     phone: u.phone ?? '',
     role_name: u.role ?? '',
-    church_unit_id: u.church_unit_id != null ? String(u.church_unit_id) : '',
+    church_unit_ids: u.unit_memberships?.map(m => m.id) ?? (u.church_unit_id != null ? [u.church_unit_id] : []),
     status: u.status ?? 'active',
   };
 }
@@ -98,12 +90,14 @@ function UserModal({
   open,
   user,
   churchUnits,
+  roles,
   onClose,
   onSaved,
 }: {
   open: boolean;
   user: User | null;
   churchUnits: ChurchUnitOption[];
+  roles: RoleRead[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -117,15 +111,23 @@ function UserModal({
     if (open) setForm(user ? formFromUser(user) : { ...EMPTY_FORM });
   }, [open, user]);
 
-  const set = (k: keyof UserForm, v: string) => setForm(f => ({ ...f, [k]: v }));
-  const isSuperAdmin = form.role_name === 'super_admin';
+  const set = <K extends keyof UserForm>(k: K, v: UserForm[K]) => setForm(f => ({ ...f, [k]: v }));
+  const selectedRole = roles.find(r => r.name === form.role_name);
+  const isSuperAdmin = selectedRole?.name === 'super_admin';
+
+  function toggleUnit(id: number) {
+    set('church_unit_ids', form.church_unit_ids.includes(id)
+      ? form.church_unit_ids.filter(x => x !== id)
+      : [...form.church_unit_ids, id]
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.full_name.trim()) { toast.error('Full name is required'); return; }
     if (!isEdit && !form.email.trim()) { toast.error('Email is required'); return; }
     if (!form.role_name) { toast.error('Role is required'); return; }
-    if (!isSuperAdmin && !form.church_unit_id) { toast.error('Church unit is required for this role'); return; }
+    if (!isSuperAdmin && form.church_unit_ids.length === 0) { toast.error('At least one church unit is required for this role'); return; }
 
     setSaving(true);
     try {
@@ -134,9 +136,11 @@ function UserModal({
           full_name: form.full_name || null,
           phone: form.phone || null,
           role_name: form.role_name || null,
-          church_unit_id: form.church_unit_id ? Number(form.church_unit_id) : null,
           status: (form.status as 'active' | 'disabled' | 'reset_required') || null,
         });
+        if (!isSuperAdmin) {
+          await client.replaceUserChurchUnits(user.id, form.church_unit_ids.map(id => ({ church_unit_id: id })));
+        }
         toast.success('User updated');
       } else {
         await client.createUser({
@@ -144,7 +148,7 @@ function UserModal({
           email: form.email,
           phone: form.phone || null,
           role_name: form.role_name || null,
-          church_unit_id: form.church_unit_id ? Number(form.church_unit_id) : null,
+          church_units: isSuperAdmin ? null : form.church_unit_ids.map(id => ({ church_unit_id: id })),
           status: (form.status as 'active' | 'disabled' | 'reset_required') || undefined,
         });
         toast.success('User created');
@@ -189,8 +193,7 @@ function UserModal({
           )}
 
           <Field label="Phone">
-            <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="+1 234 567 8900" className={inputCls} />
+            <PhoneInput value={form.phone} onChange={v => set('phone', v)} />
           </Field>
 
           <Field label="Status">
@@ -205,7 +208,7 @@ function UserModal({
         <Field label="Role" required>
           <select value={form.role_name} onChange={e => set('role_name', e.target.value)} className={inputCls}>
             <option value="">Select role…</option>
-            {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {roles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
           </select>
         </Field>
 
@@ -215,17 +218,36 @@ function UserModal({
             <span>Super Admin has access to all church units — no assignment needed.</span>
           </div>
         ) : (
-          <Field label="Church Unit" required>
-            <select value={form.church_unit_id} onChange={e => set('church_unit_id', e.target.value)} className={inputCls}>
-              <option value="">Select church unit…</option>
+          <Field label="Church Units" required>
+            <div className="border border-border rounded-lg divide-y divide-border overflow-hidden max-h-52 overflow-y-auto">
               {groups.map(g => (
-                <optgroup key={g} label={g.charAt(0).toUpperCase() + g.slice(1) + 's'}>
-                  {churchUnits.filter(u => u.type === g).map(u => (
-                    <option key={u.id} value={String(u.id)}>{u.name}</option>
-                  ))}
-                </optgroup>
+                <div key={g}>
+                  <p className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/40">
+                    {g.charAt(0).toUpperCase() + g.slice(1)}s
+                  </p>
+                  {churchUnits.filter(u => u.type === g).map(u => {
+                    const checked = form.church_unit_ids.includes(u.id);
+                    return (
+                      <label key={u.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors ${checked ? 'bg-navy/5' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleUnit(u.id)}
+                          className="w-3.5 h-3.5 accent-navy shrink-0"
+                        />
+                        <span className="text-xs text-foreground">{u.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               ))}
-            </select>
+              {churchUnits.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">No church units available</p>
+              )}
+            </div>
+            {form.church_unit_ids.length > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">{form.church_unit_ids.length} unit{form.church_unit_ids.length !== 1 ? 's' : ''} selected</p>
+            )}
           </Field>
         )}
       </form>
@@ -290,6 +312,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [churchUnits, setChurchUnits] = useState<ChurchUnitOption[]>([]);
+  const [roles, setRoles] = useState<RoleRead[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -304,11 +327,15 @@ export default function AdminUsers() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
 
-  // Load church units once
+  // Load church units and roles once
   useEffect(() => {
     client.listChurchUnitsPublic().then(r => {
       const items = Array.isArray(r.data) ? r.data : (r.data as { items?: ChurchUnitOption[] })?.items ?? [];
       setChurchUnits((items as ChurchUnitOption[]).map(u => ({ id: u.id, name: u.name, type: u.type })));
+    }).catch(() => {/* non-critical */});
+
+    client.listRoles().then(r => {
+      setRoles(Array.isArray(r.data) ? r.data : []);
     }).catch(() => {/* non-critical */});
   }, [client]);
 
@@ -461,9 +488,18 @@ export default function AdminUsers() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-xs text-muted-foreground hidden md:table-cell">
-                          {isSA
-                            ? <span className="italic text-[#8e3168] font-medium">All units</span>
-                            : (u.church_unit_name ?? '—')}
+                          {isSA ? (
+                            <span className="italic text-[#8e3168] font-medium">All units</span>
+                          ) : u.unit_memberships?.length > 0 ? (
+                            <span title={u.unit_memberships.map(m => m.name).join(', ')}>
+                              {u.unit_memberships[0].name}
+                              {u.unit_memberships.length > 1 && (
+                                <span className="ml-1 text-[10px] font-medium text-navy bg-navy/10 px-1.5 py-0.5 rounded-full">
+                                  +{u.unit_memberships.length - 1}
+                                </span>
+                              )}
+                            </span>
+                          ) : (u.church_unit_name ?? '—')}
                         </td>
                         <td className="px-5 py-3.5 hidden lg:table-cell">
                           <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[u.status] ?? 'bg-muted text-muted-foreground'}`}>
@@ -495,6 +531,7 @@ export default function AdminUsers() {
         open={modalOpen}
         user={editUser}
         churchUnits={churchUnits}
+        roles={roles}
         onClose={() => setModalOpen(false)}
         onSaved={handleSaved}
       />

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, ReactNode } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { useAdminAuth } from './contexts/AdminAuthContext';
@@ -34,6 +34,7 @@ const AdminUsers           = lazy(() => import('./pages/admin/Users'));
 const AdminEvents          = lazy(() => import('./pages/admin/Events'));
 const AdminLeadership      = lazy(() => import('./pages/admin/Leadership'));
 const AdminRoles           = lazy(() => import('./pages/admin/Roles'));
+const AdminAddParishioner  = lazy(() => import('./pages/admin/AddParishioner'));
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -61,6 +62,15 @@ function AdminPrivateRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login/admin" replace />;
 }
 
+function AdminSDKProvider({ children }: { children: ReactNode }) {
+  const { logout } = useAdminAuth();
+  return (
+    <SDKProvider baseUrl={API_BASE_URL} tokenKey="admin_token" onUnauthorized={logout}>
+      {children}
+    </SDKProvider>
+  );
+}
+
 export function App() {
   return (
     <Routes>
@@ -86,16 +96,17 @@ export function App() {
       {/* ── Admin portal — Suspense lives inside AdminLayout so sidebar never unmounts ── */}
       <Route element={
         <AdminPrivateRoute>
-          <SDKProvider baseUrl={API_BASE_URL} tokenKey="admin_token">
+          <AdminSDKProvider>
             <AdminLayout />
-          </SDKProvider>
+          </AdminSDKProvider>
         </AdminPrivateRoute>
       }>
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/dashboard"         element={<AdminDashboard />} />
         <Route path="/admin/church-units"      element={<AdminChurchUnits />} />
         <Route path="/admin/church-units/:id"  element={<AdminChurchUnitDetail />} />
-        <Route path="/admin/parishioners"      element={<AdminParishioners />} />
+        <Route path="/admin/parishioners"          element={<AdminParishioners />} />
+        <Route path="/admin/parishioners/new"   element={<AdminAddParishioner />} />
         <Route path="/admin/parishioners/:id"  element={<AdminParishionerDetail />} />
         <Route path="/admin/communities"       element={<AdminCommunities />} />
         <Route path="/admin/communities/:id"   element={<AdminCommunityDetail />} />
