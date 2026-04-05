@@ -4,15 +4,15 @@ applications:
       phases:
         preBuild:
           commands:
-            - cd ../.. && yarn install --frozen-lockfile
+            - yarn install --frozen-lockfile
         build:
           commands:
-            - cd ../.. && yarn nx build church-management-app
+            - yarn nx build church-management-app
       artifacts:
-        baseDirectory: dist
+        baseDirectory: apps/church-management-app/dist
         files:
           - '**/*'
       cache:
         paths:
-          - ../../node_modules/**/*
+          - node_modules/**/*
     appRoot: apps/church-management-app
