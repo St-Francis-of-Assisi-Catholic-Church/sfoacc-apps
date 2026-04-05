@@ -9,10 +9,10 @@ applications:
           commands:
             - cd $CODEBUILD_SRC_DIR && npx nx build church-management-app
       artifacts:
-        baseDirectory: apps/church-management-app/dist
+        baseDirectory: dist
         files:
           - '**/*'
       cache:
         paths:
-          - node_modules/**/*
-    appRoot: .
+          - $CODEBUILD_SRC_DIR/node_modules/**/*
+    appRoot: apps/church-management-app
