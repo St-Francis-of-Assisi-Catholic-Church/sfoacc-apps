@@ -1,16 +1,18 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - yarn install --frozen-lockfile
-    build:
-      commands:
-        - npx nx build church-management-app
-  artifacts:
-    baseDirectory: apps/church-management-app/dist
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - node_modules/**/*
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - cd $CODEBUILD_SRC_DIR && yarn install --frozen-lockfile
+        build:
+          commands:
+            - cd $CODEBUILD_SRC_DIR && npx nx build church-management-app
+      artifacts:
+        baseDirectory: apps/church-management-app/dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    appRoot: .
