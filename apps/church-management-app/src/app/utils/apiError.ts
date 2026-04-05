@@ -39,8 +39,13 @@ export function extractApiError(err: unknown, fallback = 'Something went wrong.'
     if (typeof b.message === 'string') return b.message;
   }
 
-  // Native Error
-  if (err instanceof Error) return err.message;
+  // APIError from SDK — has .status + .message
+  if (err instanceof Error) {
+    const status = (err as { status?: number }).status;
+    if (status === 403) return 'You don\'t have permission to perform this action.';
+    if (status === 404) return 'The requested resource was not found.';
+    return err.message;
+  }
 
   return fallback;
 }

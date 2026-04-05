@@ -268,7 +268,7 @@ function Pagination({ page, total, pageSize, onPage }: { page: number; total: nu
   }
 
   return (
-    <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-muted/20 text-xs text-muted-foreground">
+    <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-t border-border bg-muted/20 text-xs text-muted-foreground">
       <span>{total} user{total !== 1 ? 's' : ''}</span>
       <div className="flex items-center gap-1">
         <button
@@ -389,12 +389,12 @@ export default function AdminUsers() {
           <p className="text-sm text-muted-foreground mt-0.5">{total} system user{total !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => load({ manual: true })} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={() => load({ manual: true })} disabled={refreshing} title="Refresh">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
+            <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
           </Button>
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="w-3.5 h-3.5" /> Add User
+          <Button size="sm" onClick={openAdd} title="Add User">
+            <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add User</span>
           </Button>
         </div>
       </div>
@@ -440,18 +440,17 @@ export default function AdminUsers() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col flex-1 min-h-0">
         {loading ? (
           <div className="p-10 text-center text-sm text-muted-foreground animate-pulse">Loading users…</div>
         ) : users.length === 0 ? (
           <div className="p-10 text-center text-sm text-muted-foreground">No users found.</div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/40 border-b border-border">
+                <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm border-b border-border z-10">
+                  <tr>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">User</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Role</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Church Unit</th>
@@ -524,7 +523,6 @@ export default function AdminUsers() {
             <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
           </>
         )}
-      </div>
       </div>
 
       <UserModal

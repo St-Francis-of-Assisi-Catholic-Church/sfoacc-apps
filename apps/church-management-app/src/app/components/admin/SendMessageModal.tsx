@@ -1,52 +1,10 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { X, Send, Mail, MessageSquare, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../ui';
 import { useSDK } from '../../contexts/SDKContext';
 import { toastApiError } from '../../utils/apiError';
-
-// ── Templates ─────────────────────────────────────────────────────────────────
-
-export const MESSAGE_TEMPLATES: { id: string; label: string; subject: string; body: string }[] = [
-  {
-    id: 'custom',
-    label: 'Custom Message',
-    subject: '',
-    body: '',
-  },
-  {
-    id: 'welcome',
-    label: 'Welcome to the Parish',
-    subject: 'Welcome to Saints Francis of Assisi Catholic Church',
-    body: 'Dear {name},\n\nWelcome to Saints Francis of Assisi Catholic Church! We are truly delighted to have you as a member of our parish family. May your journey with us be filled with grace and community.\n\nGod bless you.',
-  },
-  {
-    id: 'verification_reminder',
-    label: 'Verification Reminder',
-    subject: 'Complete Your Membership Verification',
-    body: 'Dear {name},\n\nThis is a friendly reminder to complete your membership verification. Please update your profile so that we can keep our parish records accurate.\n\nThank you.',
-  },
-  {
-    id: 'dues_reminder',
-    label: 'Church Dues Reminder',
-    subject: 'Church Dues Reminder',
-    body: 'Dear {name},\n\nThis is a gentle reminder that your church dues are outstanding. Kindly settle your dues at your earliest convenience.\n\nThank you for your continued support of our parish.',
-  },
-  {
-    id: 'event_invite',
-    label: 'Event Invitation',
-    subject: 'You Are Invited to a Parish Event',
-    body: 'Dear {name},\n\nWe would like to invite you to an upcoming event at our parish. Details will be communicated shortly. We hope to see you there!\n\nGod bless.',
-  },
-  {
-    id: 'bereavement',
-    label: 'Bereavement / Condolence',
-    subject: 'Our Condolences',
-    body: 'Dear {name},\n\nThe entire parish family extends our heartfelt condolences to you and your loved ones during this difficult time. You are in our thoughts and prayers.',
-  },
-];
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import type { MessageTemplate } from '@sfoacc/sdk';
 
 type Channel = 'email' | 'sms' | 'both';
 
@@ -56,37 +14,44 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const CUSTOM_ID = '__custom__';
 
 export function SendMessageModal({ parishionerIds, defaultChannel = 'both', onClose }: Props) {
   const client = useSDK();
 
-  const [templateId, setTemplateId] = useState('custom');
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [templateId, setTemplateId] = useState(CUSTOM_ID);
   const [channel, setChannel] = useState<Channel>(defaultChannel);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
 
+  useEffect(() => {
+    client.listMessageTemplates()
+      .then(r => setTemplates(r.data?.templates ?? []))
+      .catch(() => {});
+  }, [client]);
+
   const selectTemplate = (id: string) => {
     setTemplateId(id);
-    const tpl = MESSAGE_TEMPLATES.find(t => t.id === id);
-    if (tpl) {
-      setSubject(tpl.subject);
-      setMessage(tpl.body);
-    }
+    if (id === CUSTOM_ID) { setSubject(''); setMessage(''); return; }
+    const tpl = templates.find(t => t.id === id);
+    if (tpl?.content) setMessage(tpl.content);
   };
+
+  const isCustom = templateId === CUSTOM_ID;
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) { toast.error('Message cannot be empty.'); return; }
+    if (isCustom && !message.trim()) { toast.error('Message cannot be empty.'); return; }
     setSending(true);
     try {
       await client.sendBulkMessage({
         parishioner_ids: parishionerIds,
         channel,
-        custom_message: message.trim(),
-        subject: subject.trim() || null,
-        template: templateId !== 'custom' ? templateId : undefined,
+        ...(isCustom
+          ? { custom_message: message.trim(), subject: subject.trim() || null }
+          : { template: templateId, subject: subject.trim() || null }),
       });
       toast.success('Message sent successfully.');
       onClose();
@@ -133,10 +98,7 @@ export function SendMessageModal({ parishionerIds, defaultChannel = 'both', onCl
             <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Channel</label>
             <div className="flex gap-2">
               {CHANNELS.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setChannel(id)}
+                <button key={id} type="button" onClick={() => setChannel(id)}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
                     channel === id
                       ? 'bg-navy text-white border-navy'
@@ -153,47 +115,50 @@ export function SendMessageModal({ parishionerIds, defaultChannel = 'both', onCl
           {/* Template */}
           <div>
             <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Template</label>
-            <select
-              value={templateId}
-              onChange={e => selectTemplate(e.target.value)}
-              className={`${INP} appearance-none cursor-pointer`}
-            >
-              {MESSAGE_TEMPLATES.map(t => (
-                <option key={t.id} value={t.id}>{t.label}</option>
+            <select value={templateId} onChange={e => selectTemplate(e.target.value)}
+              className={`${INP} appearance-none cursor-pointer`}>
+              <option value={CUSTOM_ID}>Custom Message</option>
+              {templates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}{t.is_system ? ' ★' : ''}</option>
               ))}
             </select>
+            {!isCustom && templates.find(t => t.id === templateId)?.description && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {templates.find(t => t.id === templateId)?.description}
+              </p>
+            )}
           </div>
 
-          {/* Subject */}
+          {/* Subject (email) */}
           {showSubject && (
             <div>
               <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                 Subject <span className="text-muted-foreground/50 normal-case font-normal">(email)</span>
               </label>
-              <input
-                type="text"
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-                className={INP}
-                placeholder="Email subject…"
-              />
+              <input type="text" value={subject} onChange={e => setSubject(e.target.value)}
+                className={INP} placeholder="Email subject…" />
             </div>
           )}
 
-          {/* Message */}
+          {/* Message body — shown for custom; for system templates show preview */}
           <div className="flex-1">
             <label className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-              Message <span className="text-destructive">*</span>
+              {isCustom ? <><span>Message</span> <span className="text-destructive">*</span></> : 'Preview'}
             </label>
-            <textarea
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              rows={6}
-              className={`${INP} resize-none`}
-              placeholder="Type your message… Use {name} to personalise."
-              required
-            />
-            <p className="text-[10px] text-muted-foreground mt-1">Use <code className="bg-muted px-1 rounded">{'{name}'}</code> to insert the recipient's name.</p>
+            {isCustom ? (
+              <>
+                <textarea value={message} onChange={e => setMessage(e.target.value)}
+                  rows={6} className={`${INP} resize-none`}
+                  placeholder="Type your message… Use {name} to personalise." required />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Use <code className="bg-muted px-1 rounded">{'{name}'}</code> to insert the recipient's name.
+                </p>
+              </>
+            ) : (
+              <div className="px-3 py-2.5 bg-muted/40 border border-border rounded-lg text-sm text-foreground whitespace-pre-wrap min-h-[120px]">
+                {message || <span className="text-muted-foreground italic">No preview available</span>}
+              </div>
+            )}
           </div>
 
         </form>
@@ -201,7 +166,8 @@ export function SendMessageModal({ parishionerIds, defaultChannel = 'both', onCl
         {/* Footer */}
         <div className="px-5 pb-5 flex items-center justify-end gap-2 flex-shrink-0 border-t border-border pt-4">
           <Button variant="outline" size="sm" onClick={onClose} disabled={sending}>Cancel</Button>
-          <Button size="sm" isLoading={sending} onClick={handleSend} disabled={!message.trim()}>
+          <Button size="sm" isLoading={sending} onClick={handleSend}
+            disabled={isCustom ? !message.trim() : !templateId}>
             <Send className="w-3 h-3" /> Send Message
           </Button>
         </div>

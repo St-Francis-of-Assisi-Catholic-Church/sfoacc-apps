@@ -1,8 +1,9 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { CheckCircle, AlertCircle, KeyRound, MessageSquare } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { useSDK } from '../contexts/SDKContext';
 import type { User } from '@sfoacc/sdk';
 import { Button } from '../components/ui';
@@ -42,7 +43,6 @@ function PasswordResetForm({ email, onSuccess }: { email: string; onSuccess: (to
       const res = await client.resetPassword({ email, temp_password: tempPassword, new_password: newPassword });
       const data = res.data as { access_token: string; user: User } | null;
       if (data?.access_token) {
-        toast.success('Password updated. Welcome!');
         onSuccess(data.access_token, data.user);
       }
     } catch (err: unknown) {
@@ -82,29 +82,30 @@ function PasswordResetForm({ email, onSuccess }: { email: string; onSuccess: (to
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Step = 'identifier' | 'otp';
-type Group = { name: string; label: string };
-type ChurchUnit = { id: number; name: string; type: string };
+type LoginMethod = 'otp' | 'password';
 
 // ── Main login page ───────────────────────────────────────────────────────────
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
+  const { login: adminLogin, isAuthenticated: isAdminAuthenticated } = useAdminAuth();
   const client = useSDK();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) navigate('/dashboard', { replace: true });
-  }, [isAuthenticated, navigate]);
+    if (isAdminAuthenticated) navigate('/admin/dashboard', { replace: true });
+    else if (isAuthenticated) navigate('/dashboard', { replace: true });
+  }, [isAuthenticated, isAdminAuthenticated, navigate]);
 
   const [step, setStep] = useState<Step>('identifier');
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('otp');
+  const [hasOtp, setHasOtp] = useState(true);
+  const [hasPassword, setHasPassword] = useState(false);
   const [identifier, setIdentifier] = useState('');
-  const [selectedRole, setSelectedRole] = useState('');
-  const [selectedUnit, setSelectedUnit] = useState<number | ''>('');
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [units, setUnits] = useState<ChurchUnit[]>([]);
-  const [configLoading, setConfigLoading] = useState(true);
+  const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [needsReset, setNeedsReset] = useState(false);
 
@@ -116,38 +117,60 @@ export default function LoginPage() {
   useEffect(() => {
     client.getLoginConfig()
       .then(res => {
-        const cfg = res.data;
-        // Filter super_admin — that's the admin portal
-        const filteredGroups = (cfg.groups ?? []).filter(g => g.name !== 'super_admin');
-        setGroups(filteredGroups);
-        setUnits(cfg.church_units ?? []);
-        // Auto-select parish (St Francis by default)
-        const parish = (cfg.church_units ?? []).find(u => u.type === 'parish');
-        if (parish) setSelectedUnit(parish.id);
-        // Auto-select if only one role
-        if (filteredGroups.length === 1) setSelectedRole(filteredGroups[0].name);
+        const m = res.data.login_methods ?? {};
+        const otp = m.otp_email || m.otp_sms;
+        setHasOtp(!!otp);
+        setHasPassword(!!m.password);
+        setLoginMethod(otp ? 'otp' : 'password');
       })
-      .catch(() => {})
-      .finally(() => setConfigLoading(false));
+      .catch(() => {});
   }, [client]);
 
-  const handleSuccess = (token: string, user: User) => {
-    login(token, user);
+  const handleSuccess = (res: { access_token: string; user: User; routing?: string; accessible_units?: import('@sfoacc/sdk').ChurchUnitSummary[]; default_unit?: import('@sfoacc/sdk').ChurchUnitSummary | null }) => {
+    const { access_token: token, user, routing, accessible_units = [], default_unit } = res;
+
+    if (routing === 'super_admin') {
+      adminLogin(token, user);
+      toast.success(`Welcome, ${user.full_name}.`);
+      navigate('/admin/dashboard');
+      return;
+    }
+
+    if (routing === 'no_access') {
+      setError('Your account has no access to any church unit. Contact an administrator.');
+      return;
+    }
+
+    if (routing === 'unit_dashboard') {
+      login(token, user, accessible_units, default_unit ?? null);
+      toast.success(`Welcome back, ${user.full_name}!`);
+      navigate('/dashboard');
+      return;
+    }
+
+    if (routing === 'unit_selection') {
+      login(token, user, accessible_units, null);
+      navigate('/select-unit');
+      return;
+    }
+
+    // Fallback — treat as single-unit login
+    login(token, user, accessible_units, default_unit ?? null);
     toast.success(`Welcome back, ${user.full_name}!`);
     navigate('/dashboard');
   };
 
   const handleSendOtp = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isValid) { toast.error('Enter a valid email or phone (e.g. 233543460633)'); return; }
-    if (!selectedRole) { toast.error('Please select your role'); return; }
+    if (!isValid) { setError('Enter a valid email or phone (e.g. 233543460633)'); return; }
+    setError('');
     setLoading(true);
     try {
       await client.requestOtp(trimmed);
       toast.success('OTP sent — check your email or SMS.');
       setStep('otp');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send OTP');
+      setError(err instanceof Error ? err.message : 'Failed to send OTP');
     } finally {
       setLoading(false);
     }
@@ -155,26 +178,51 @@ export default function LoginPage() {
 
   const handleVerifyOtp = async (e: FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
     try {
       const res = await client.verifyOtp(trimmed, otpCode);
       if (res.user.status === 'reset_required') {
         setResetEmail(trimmed); setNeedsReset(true); return;
       }
-      handleSuccess(res.access_token, res.user);
+      handleSuccess(res);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Invalid OTP code');
+      setError(err instanceof Error ? err.message : 'Invalid OTP code');
     } finally {
       setLoading(false);
     }
   };
 
-  if (needsReset) return <PasswordResetForm email={resetEmail} onSuccess={handleSuccess} />;
+  const handlePasswordLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!isValid || !password) return;
+    setError('');
+    setLoading(true);
+    try {
+      const res = await client.login(trimmed, password);
+      if (res.user.status === 'reset_required') {
+        setResetEmail(trimmed); setNeedsReset(true); return;
+      }
+      handleSuccess(res);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (needsReset) return (
+    <PasswordResetForm
+      email={resetEmail}
+      onSuccess={(token, user) => {
+        login(token, user, [], null);
+        toast.success('Password updated. Welcome!');
+        navigate('/dashboard');
+      }}
+    />
+  );
 
   const inputCls = 'w-full px-4 py-2.5 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring transition-all text-foreground placeholder:text-muted-foreground text-sm';
-  const selectCls = `${inputCls} appearance-none pr-10 cursor-pointer disabled:opacity-60`;
-  const selectedRoleLabel = groups.find(r => r.name === selectedRole)?.label;
-  const selectedUnitName = units.find(u => u.id === selectedUnit)?.name;
 
   return (
     <div>
@@ -184,35 +232,39 @@ export default function LoginPage() {
       </div>
 
       {step === 'identifier' && (
-        <form onSubmit={handleSendOtp} className="space-y-4">
-
-          {/* Church unit */}
-          <div>
-            <label className="block text-xs font-medium text-foreground mb-1.5">Church Unit</label>
-            <div className="relative">
-              <select value={selectedUnit} onChange={e => setSelectedUnit(Number(e.target.value))}
-                disabled={configLoading} className={selectCls}>
-                <option value="">{configLoading ? 'Loading…' : 'Select church unit'}</option>
-                {units.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <div className="space-y-4">
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700">{error}</p>
             </div>
-          </div>
+          )}
 
-          {/* Role */}
-          <div>
-            <label className="block text-xs font-medium text-foreground mb-1.5">Sign in as</label>
-            <div className="relative">
-              <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)}
-                required disabled={configLoading} className={selectCls}>
-                <option value="">{configLoading ? 'Loading…' : 'Select your role'}</option>
-                {groups.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          {/* Login method toggle — shown when both are enabled */}
+          {hasOtp && hasPassword && (
+            <div className="flex gap-1 bg-muted rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => { setLoginMethod('otp'); setError(''); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${
+                  loginMethod === 'otp' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                OTP
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLoginMethod('password'); setError(''); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${
+                  loginMethod === 'password' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                Password
+              </button>
             </div>
-          </div>
+          )}
 
           {/* Identifier */}
           <div>
@@ -239,12 +291,12 @@ export default function LoginPage() {
                 </span>
               )}
             </div>
-            {showHint && identifierType === 'phone' && (
+            {showHint && identifierType === 'phone' && loginMethod === 'otp' && (
               <p className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1">
                 <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" /> Phone detected · OTP sent via SMS
               </p>
             )}
-            {showHint && identifierType === 'email' && (
+            {showHint && identifierType === 'email' && loginMethod === 'otp' && (
               <p className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1">
                 <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" /> Email detected · OTP sent to inbox
               </p>
@@ -257,34 +309,60 @@ export default function LoginPage() {
             )}
           </div>
 
-          <Button
-            type="submit"
-            isLoading={loading}
-            disabled={!isValid || !selectedRole || configLoading}
-            className="w-full justify-center !mt-5"
-          >
-            Continue
-          </Button>
-        </form>
+          {/* Password field */}
+          {loginMethod === 'password' && (
+            <form onSubmit={handlePasswordLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className={inputCls}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+              <Button
+                type="submit"
+                isLoading={loading}
+                disabled={!isValid || !password}
+                className="w-full justify-center !mt-5"
+              >
+                Sign In
+              </Button>
+            </form>
+          )}
+
+          {/* OTP send button */}
+          {loginMethod === 'otp' && (
+            <form onSubmit={handleSendOtp}>
+              <Button
+                type="submit"
+                isLoading={loading}
+                disabled={!isValid}
+                className="w-full justify-center !mt-5"
+              >
+                Continue
+              </Button>
+            </form>
+          )}
+        </div>
       )}
 
       {step === 'otp' && (
         <form onSubmit={handleVerifyOtp} className="space-y-4">
-          <div className="bg-muted/50 border border-border rounded-xl px-4 py-3 space-y-0.5">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Signing in to</p>
-            <p className="text-sm font-semibold text-foreground">{trimmed}</p>
-            <div className="flex flex-wrap gap-2 mt-1.5">
-              {selectedUnitName && (
-                <span className="inline-flex items-center text-[11px] font-medium bg-navy/10 text-navy px-2 py-0.5 rounded-full">
-                  {selectedUnitName}
-                </span>
-              )}
-              {selectedRoleLabel && (
-                <span className="inline-flex items-center text-[11px] font-medium bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                  {selectedRoleLabel}
-                </span>
-              )}
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700">{error}</p>
             </div>
+          )}
+
+          <div className="bg-muted/50 border border-border rounded-xl px-4 py-3">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Signing in to</p>
+            <p className="text-sm font-semibold text-foreground mt-0.5">{trimmed}</p>
           </div>
 
           <div>
@@ -317,7 +395,7 @@ export default function LoginPage() {
           </Button>
           <button
             type="button"
-            onClick={() => { setStep('identifier'); setOtpCode(''); }}
+            onClick={() => { setStep('identifier'); setOtpCode(''); setError(''); }}
             className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             ← Change identifier or resend

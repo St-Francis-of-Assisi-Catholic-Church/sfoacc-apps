@@ -170,8 +170,8 @@ function EditSelect({ label, name, draft, onChange, options, placeholder = '— 
 function SaveCancel({ onSave, onCancel, saving }: { onSave: () => void; onCancel: () => void; saving: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
-      <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}><X className="w-3 h-3" /> Cancel</Button>
-      <Button size="sm" isLoading={saving} onClick={onSave}><Save className="w-3 h-3" /> Save</Button>
+      <Button variant="outline" size="sm" onClick={onCancel} disabled={saving} title="Cancel"><X className="w-3 h-3" /> <span className="hidden sm:inline">Cancel</span></Button>
+      <Button size="sm" isLoading={saving} onClick={onSave} title="Save"><Save className="w-3 h-3" /> <span className="hidden sm:inline">Save</span></Button>
     </div>
   );
 }
@@ -317,7 +317,7 @@ function ActionsMenu({ onAction, currentMembership, currentVerification }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ParishionerDetail() {
+export default function ParishionerDetail({ backPath = '/admin/parishioners', canEdit = true }: { backPath?: string; canEdit?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const client = useSDK();
@@ -966,7 +966,7 @@ export default function ParishionerDetail() {
 
         {/* Row 1: back + avatar + name + actions */}
         <div className="flex items-start gap-3">
-          <button onClick={() => navigate('/admin/parishioners')}
+          <button onClick={() => navigate(backPath)}
             className="mt-1 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -1015,7 +1015,7 @@ export default function ParishionerDetail() {
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
-              <ActionsMenu onAction={handleAction} currentMembership={data.membership_status} currentVerification={data.verification_status} />
+              {canEdit && <ActionsMenu onAction={handleAction} currentMembership={data.membership_status} currentVerification={data.verification_status} />}
             </div>
           </div>
         </div>
@@ -1065,16 +1065,16 @@ export default function ParishionerDetail() {
 
           {/* ── 1. Personal Info ── */}
           <Card title="Personal Information" icon={User} editing={personal.editing}
-            editControls={personal.editing ? (
+            editControls={canEdit ? (personal.editing ? (
               <SaveCancel saving={personal.saving} onCancel={personal.cancel} onSave={async () => {
                 personal.setSaving(true);
                 try { await savePersonal(); personal.done(); } catch { /* toasted */ } finally { personal.setSaving(false); }
               }} />
             ) : (
               <button className={EDIT_BTN} onClick={() => personal.startEdit(data as unknown as Record<string, unknown>)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {personal.editing ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1110,16 +1110,16 @@ export default function ParishionerDetail() {
 
           {/* ── 2. Contact ── */}
           <Card title="Contact Information" icon={Phone} editing={contact.editing}
-            editControls={contact.editing ? (
+            editControls={canEdit ? (contact.editing ? (
               <SaveCancel saving={contact.saving} onCancel={contact.cancel} onSave={async () => {
                 contact.setSaving(true);
                 try { await saveContact(); contact.done(); } catch { /* toasted */ } finally { contact.setSaving(false); }
               }} />
             ) : (
               <button className={EDIT_BTN} onClick={() => contact.startEdit(data as unknown as Record<string, unknown>)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {contact.editing ? (
               <div className="space-y-4">
@@ -1147,16 +1147,16 @@ export default function ParishionerDetail() {
 
           {/* ── 3. Origin & Location ── */}
           <Card title="Origin & Location" icon={MapPin} editing={location.editing}
-            editControls={location.editing ? (
+            editControls={canEdit ? (location.editing ? (
               <SaveCancel saving={location.saving} onCancel={location.cancel} onSave={async () => {
                 location.setSaving(true);
                 try { await saveLocation(); location.done(); } catch { /* toasted */ } finally { location.setSaving(false); }
               }} />
             ) : (
               <button className={EDIT_BTN} onClick={() => location.startEdit(data as unknown as Record<string, unknown>)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {location.editing ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1183,16 +1183,16 @@ export default function ParishionerDetail() {
 
           {/* ── 4. Church IDs ── */}
           <Card title="Church IDs" icon={Hash} editing={churchIds.editing}
-            editControls={churchIds.editing ? (
+            editControls={canEdit ? (churchIds.editing ? (
               <SaveCancel saving={churchIds.saving} onCancel={churchIds.cancel} onSave={async () => {
                 churchIds.setSaving(true);
                 try { await saveChurchIds(); churchIds.done(); } catch { /* toasted */ } finally { churchIds.setSaving(false); }
               }} />
             ) : (
               <button className={EDIT_BTN} onClick={() => churchIds.startEdit(data as unknown as Record<string, unknown>)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {churchIds.editing ? (
               <div className="space-y-4">
@@ -1203,7 +1203,7 @@ export default function ParishionerDetail() {
                 <CopyChip label="System ID"     value={data.id ?? null}           className="w-full justify-between" />
                 <CopyChip label="Old Church ID" value={data.old_church_id ?? null} className="w-full justify-between" />
                 <CopyChip label="New Church ID" value={data.new_church_id ?? null} className="w-full justify-between" />
-                {!data.new_church_id && (
+                {canEdit && !data.new_church_id && (
                   <div className="pt-1">
                     <Button
                       size="sm"
@@ -1226,16 +1226,16 @@ export default function ParishionerDetail() {
 
           {/* ── 5. Church Information ── */}
           <Card title="Church Information" icon={Church} editing={church.editing}
-            editControls={church.editing ? (
+            editControls={canEdit ? (church.editing ? (
               <SaveCancel saving={church.saving} onCancel={church.cancel} onSave={async () => {
                 church.setSaving(true);
                 try { await saveChurch(); church.done(); } catch { /* toasted */ } finally { church.setSaving(false); }
               }} />
             ) : (
               <button className={EDIT_BTN} onClick={() => church.startEdit(data as unknown as Record<string, unknown>)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {church.editing ? (
               <div className="space-y-4">
@@ -1271,16 +1271,16 @@ export default function ParishionerDetail() {
 
           {/* ── 5. Occupation ── */}
           <Card title="Occupation" icon={Briefcase} editing={occEditing}
-            editControls={occEditing ? (
+            editControls={canEdit ? (occEditing ? (
               <SaveCancel saving={occSaving} onCancel={() => setOccEditing(false)} onSave={saveOccupation} />
             ) : (
               <button className={EDIT_BTN} onClick={() => {
                 setOccDraft({ role: data.occupation?.role ?? '', employer: data.occupation?.employer ?? '' });
                 setOccEditing(true);
               }}>
-                <Pencil className="w-3 h-3" /> {data.occupation ? 'Edit' : 'Add'}
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">{data.occupation ? 'Edit' : 'Add'}</span>
               </button>
-            )}
+            )) : undefined}
           >
             {occEditing ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1305,13 +1305,13 @@ export default function ParishionerDetail() {
 
           {/* ── 6. Family ── */}
           <Card title="Family" icon={Heart} editing={famEditing}
-            editControls={famEditing ? (
+            editControls={canEdit ? (famEditing ? (
               <SaveCancel saving={famSaving} onCancel={() => setFamEditing(false)} onSave={saveFamily} />
             ) : (
               <button className={EDIT_BTN} onClick={startFamilyEdit}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {famEditing ? (
               <div className="space-y-5">
@@ -1457,15 +1457,15 @@ export default function ParishionerDetail() {
           <Card
             title={`Sacraments${data.sacraments?.length ? ` (${data.sacraments.length})` : ''}`}
             icon={BookOpen} editing={sacEditing}
-            editControls={sacEditing ? (
+            editControls={canEdit ? (sacEditing ? (
               <button className={EDIT_BTN} onClick={() => { setSacEditing(false); setEditSacId(null); setShowAddSac(false); }}>
-                <X className="w-3 h-3" /> Done
+                <X className="w-3 h-3" /> <span className="hidden sm:inline">Done</span>
               </button>
             ) : (
               <button className={EDIT_BTN} onClick={() => setSacEditing(true)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {/* Edit mode: inline per-row editing */}
             {sacEditing && (
@@ -1495,7 +1495,7 @@ export default function ParishionerDetail() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button size="sm" isLoading={sacSaving} onClick={() => updateSacrament(s.id)}><Save className="w-3 h-3" /> Save</Button>
+                          <Button size="sm" isLoading={sacSaving} onClick={() => updateSacrament(s.id)}><Save className="w-3 h-3" /> <span className="hidden sm:inline">Save</span></Button>
                           <Button size="sm" variant="outline" onClick={() => setEditSacId(null)} disabled={sacSaving}>Cancel</Button>
                         </div>
                       </div>
@@ -1586,7 +1586,7 @@ export default function ParishionerDetail() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" isLoading={sacSaving} onClick={addSacrament}><Plus className="w-3 h-3" /> Add</Button>
+                      <Button size="sm" isLoading={sacSaving} onClick={addSacrament} title="Add"><Plus className="w-3 h-3" /> <span className="hidden sm:inline">Add</span></Button>
                       <Button size="sm" variant="outline" onClick={() => { setShowAddSac(false); setNewSacDraft({ sacrament_id: '' }); }} disabled={sacSaving}>Cancel</Button>
                     </div>
                   </div>
@@ -1604,15 +1604,15 @@ export default function ParishionerDetail() {
           <Card
             title={`Languages${data.languages_spoken?.length ? ` (${data.languages_spoken.length})` : ''}`}
             icon={Globe} editing={langEditing}
-            editControls={langEditing ? (
+            editControls={canEdit ? (langEditing ? (
               <button className={EDIT_BTN} onClick={() => setLangEditing(false)}>
-                <X className="w-3 h-3" /> Done
+                <X className="w-3 h-3" /> <span className="hidden sm:inline">Done</span>
               </button>
             ) : (
               <button className={EDIT_BTN} onClick={() => setLangEditing(true)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             {langEditing ? (
               <div>
@@ -1654,15 +1654,15 @@ export default function ParishionerDetail() {
             title={`Emergency Contacts${data.emergency_contacts?.length ? ` (${data.emergency_contacts.length})` : ''}`}
             icon={AlertCircle}
             editing={ecEditing}
-            editControls={ecEditing ? (
+            editControls={canEdit ? (ecEditing ? (
               <button className={EDIT_BTN} onClick={() => { setEcEditing(false); setEditEcId(null); setShowAddEc(false); }}>
-                <X className="w-3 h-3" /> Done
+                <X className="w-3 h-3" /> <span className="hidden sm:inline">Done</span>
               </button>
             ) : (
               <button className={EDIT_BTN} onClick={() => setEcEditing(true)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             <div className="divide-y divide-border -my-1">
               {(data.emergency_contacts ?? []).map(c => (
@@ -1688,7 +1688,7 @@ export default function ParishionerDetail() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button size="sm" isLoading={ecSaving} onClick={() => updateEmergencyContact(c.id)}><Save className="w-3 h-3" /> Save</Button>
+                        <Button size="sm" isLoading={ecSaving} onClick={() => updateEmergencyContact(c.id)}><Save className="w-3 h-3" /> <span className="hidden sm:inline">Save</span></Button>
                         <Button size="sm" variant="outline" onClick={() => setEditEcId(null)} disabled={ecSaving}>Cancel</Button>
                       </div>
                     </div>
@@ -1776,15 +1776,15 @@ export default function ParishionerDetail() {
             title={`Medical Conditions${data.medical_conditions?.length ? ` (${data.medical_conditions.length})` : ''}`}
             icon={AlertCircle}
             editing={mcEditing}
-            editControls={mcEditing ? (
+            editControls={canEdit ? (mcEditing ? (
               <button className={EDIT_BTN} onClick={() => { setMcEditing(false); setEditMcId(null); setShowAddMc(false); setNewMcDraft({ condition: '', notes: '' }); }}>
-                <X className="w-3 h-3" /> Done
+                <X className="w-3 h-3" /> <span className="hidden sm:inline">Done</span>
               </button>
             ) : (
               <button className={EDIT_BTN} onClick={() => setMcEditing(true)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             <div className="space-y-3">
               {(data.medical_conditions ?? []).map(m => (
@@ -1800,7 +1800,7 @@ export default function ParishionerDetail() {
                         <textarea value={mcDraft.notes} onChange={e => setMcDraft(d => ({ ...d, notes: e.target.value }))} rows={2} className={`${INP} resize-none`} />
                       </div>
                       <div className="flex gap-2 pt-1">
-                        <Button size="sm" isLoading={mcSaving} onClick={() => updateMedicalCondition(m.id)}><Save className="w-3 h-3" /> Save</Button>
+                        <Button size="sm" isLoading={mcSaving} onClick={() => updateMedicalCondition(m.id)}><Save className="w-3 h-3" /> <span className="hidden sm:inline">Save</span></Button>
                         <Button size="sm" variant="outline" onClick={() => setEditMcId(null)} disabled={mcSaving}>Cancel</Button>
                       </div>
                     </div>
@@ -1841,7 +1841,7 @@ export default function ParishionerDetail() {
                         <textarea value={newMcDraft.notes} onChange={e => setNewMcDraft(d => ({ ...d, notes: e.target.value }))} rows={2} className={`${INP} resize-none`} placeholder="Optional notes…" />
                       </div>
                       <div className="flex gap-2 pt-1">
-                        <Button size="sm" isLoading={mcSaving} onClick={addMedicalCondition} disabled={!newMcDraft.condition.trim()}><Plus className="w-3 h-3" /> Add</Button>
+                        <Button size="sm" isLoading={mcSaving} onClick={addMedicalCondition} disabled={!newMcDraft.condition.trim()} title="Add"><Plus className="w-3 h-3" /> <span className="hidden sm:inline">Add</span></Button>
                         <Button size="sm" variant="outline" onClick={() => { setShowAddMc(false); setNewMcDraft({ condition: '', notes: '' }); }} disabled={mcSaving}>Cancel</Button>
                       </div>
                     </div>
@@ -1864,15 +1864,15 @@ export default function ParishionerDetail() {
           <Card
             title={`Skills${data.skills?.length ? ` (${data.skills.length})` : ''}`}
             icon={Star} editing={skillsEditing}
-            editControls={skillsEditing ? (
+            editControls={canEdit ? (skillsEditing ? (
               <button className={EDIT_BTN} onClick={() => { setSkillsEditing(false); setNewSkill(''); }}>
-                <X className="w-3 h-3" /> Done
+                <X className="w-3 h-3" /> <span className="hidden sm:inline">Done</span>
               </button>
             ) : (
               <button className={EDIT_BTN} onClick={() => setSkillsEditing(true)}>
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
               </button>
-            )}
+            )) : undefined}
           >
             <div className="flex flex-wrap gap-2">
               {(data.skills ?? []).map(s => (
@@ -1928,15 +1928,15 @@ export default function ParishionerDetail() {
             <Card
               title={`Societies${data.societies?.length ? ` (${data.societies.length})` : ''}`}
               icon={Users} editing={socEditing}
-              editControls={socEditing ? (
+              editControls={canEdit ? (socEditing ? (
                 <button className={EDIT_BTN} onClick={() => { setSocEditing(false); setSocToAdd(''); }}>
-                  <X className="w-3 h-3" /> Done
+                  <X className="w-3 h-3" /> <span className="hidden sm:inline">Done</span>
                 </button>
               ) : (
                 <button className={EDIT_BTN} onClick={() => setSocEditing(true)}>
-                  <Pencil className="w-3 h-3" /> Edit
+                  <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Edit</span>
                 </button>
-              )}
+              )) : undefined}
             >
               <div className="space-y-1">
                 {(data.societies ?? []).map(s => (

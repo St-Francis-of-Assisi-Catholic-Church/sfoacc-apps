@@ -11,12 +11,17 @@ import AdminLayout from './layouts/AdminLayout';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Members = lazy(() => import('./pages/Members'));
 const Events = lazy(() => import('./pages/Events'));
+const EventDetail = lazy(() => import('./pages/EventDetail'));
 const Sacraments = lazy(() => import('./pages/Sacraments'));
 const Finance = lazy(() => import('./pages/Finance'));
+const Profile = lazy(() => import('./pages/Profile'));
+const SelectUnit = lazy(() => import('./pages/SelectUnit'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const Communities = lazy(() => import('./pages/Communities'));
+const Societies = lazy(() => import('./pages/Societies'));
+const Communication = lazy(() => import('./pages/Communication'));
 
 // Admin portal pages
-const AdminLoginPage       = lazy(() => import('./pages/admin/AdminLoginPage'));
 const AdminDashboard       = lazy(() => import('./pages/admin/Dashboard'));
 const AdminChurchUnits     = lazy(() => import('./pages/admin/ChurchUnits'));
 const AdminChurchUnitDetail = lazy(() => import('./pages/admin/ChurchUnitDetail'));
@@ -35,6 +40,12 @@ const AdminEvents          = lazy(() => import('./pages/admin/Events'));
 const AdminLeadership      = lazy(() => import('./pages/admin/Leadership'));
 const AdminRoles           = lazy(() => import('./pages/admin/Roles'));
 const AdminAddParishioner  = lazy(() => import('./pages/admin/AddParishioner'));
+const AdminProfile         = lazy(() => import('./pages/admin/Profile'));
+const AdminExports         = lazy(() => import('./pages/admin/Exports'));
+const AdminCommunication   = lazy(() => import('./pages/admin/Communication'));
+const AdminAuditLogs       = lazy(() => import('./pages/admin/AuditLogs'));
+const AdminRegistration    = lazy(() => import('./pages/admin/Registration'));
+const AdminEventDetail     = lazy(() => import('./pages/admin/EventDetail'));
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -59,7 +70,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function AdminPrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAdminAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login/admin" replace />;
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function PortalParishionerDetail() {
+  const { hasPermission } = useAuth();
+  return <AdminParishionerDetail backPath="/members" canEdit={hasPermission('parishioner:write')} />;
 }
 
 function AdminSDKProvider({ children }: { children: ReactNode }) {
@@ -80,18 +96,35 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
       </Route>
 
-      {/* ── Regular app ── */}
-      <Route element={<Suspense fallback={<PageLoader />}><PrivateRoute><AppLayout /></PrivateRoute></Suspense>}>
+      {/* ── Regular app — Suspense lives inside AppLayout so sidebar never unmounts ── */}
+      <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/members" element={<Members />} />
+        <Route path="/members/new" element={<AdminAddParishioner />} />
+        <Route path="/members/:id" element={<PortalParishionerDetail />} />
         <Route path="/events" element={<Events />} />
+        <Route path="/events/:unitId/:id" element={<EventDetail />} />
         <Route path="/sacraments" element={<Sacraments />} />
         <Route path="/finance" element={<Finance />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/communication" element={<Communication />} />
+        <Route path="/communities" element={<Communities />} />
+        <Route path="/communities/:id" element={<AdminCommunityDetail backPath="/communities" />} />
+        <Route path="/societies" element={<Societies />} />
+        <Route path="/societies/:id" element={<AdminSocietyDetail backPath="/societies" />} />
+        <Route path="/church-unit/:id" element={<AdminChurchUnitDetail backPath="/dashboard" basePath="/church-unit" />} />
       </Route>
 
-      {/* ── Admin auth ── */}
-      <Route path="/login/admin" element={<Suspense fallback={<PageLoader />}><AdminLoginPage /></Suspense>} />
+      {/* ── Unit selection — authenticated but no layout ── */}
+      <Route path="/select-unit" element={
+        <Suspense fallback={<PageLoader />}>
+          <PrivateRoute><SelectUnit /></PrivateRoute>
+        </Suspense>
+      } />
+
+      {/* ── Redirect legacy admin login URL ── */}
+      <Route path="/login/admin" element={<Navigate to="/login" replace />} />
 
       {/* ── Admin portal — Suspense lives inside AdminLayout so sidebar never unmounts ── */}
       <Route element={
@@ -106,6 +139,7 @@ export function App() {
         <Route path="/admin/church-units"      element={<AdminChurchUnits />} />
         <Route path="/admin/church-units/:id"  element={<AdminChurchUnitDetail />} />
         <Route path="/admin/parishioners"          element={<AdminParishioners />} />
+        <Route path="/admin/registration"          element={<AdminRegistration />} />
         <Route path="/admin/parishioners/new"   element={<AdminAddParishioner />} />
         <Route path="/admin/parishioners/:id"  element={<AdminParishionerDetail />} />
         <Route path="/admin/communities"       element={<AdminCommunities />} />
@@ -118,8 +152,13 @@ export function App() {
         <Route path="/admin/settings"          element={<AdminSettings />} />
         <Route path="/admin/users"             element={<AdminUsers />} />
         <Route path="/admin/events"            element={<AdminEvents />} />
+        <Route path="/admin/events/:unitId/:id" element={<AdminEventDetail />} />
         <Route path="/admin/leadership"        element={<AdminLeadership />} />
         <Route path="/admin/roles"             element={<AdminRoles />} />
+        <Route path="/admin/profile"           element={<AdminProfile />} />
+        <Route path="/admin/exports"           element={<AdminExports />} />
+        <Route path="/admin/communication"     element={<AdminCommunication />} />
+        <Route path="/admin/audit-logs"        element={<AdminAuditLogs />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

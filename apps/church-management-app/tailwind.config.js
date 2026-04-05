@@ -7,78 +7,72 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // ── Surfaces ─────────────────────────────────────────────────────────
-        background:            '#f5f2ed',          // warm off-white — suits gold
-        foreground:            '#1c1917',           // Stone 900
-        card:                  '#ffffff',
-        'card-foreground':     '#1c1917',
-
-        // ── Primary — Gold ───────────────────────────────────────────────────
-        primary:               '#c8940f',           // rich amber-gold
-        'primary-foreground':  '#ffffff',
-
-        // ── Secondary ────────────────────────────────────────────────────────
-        secondary:             '#f7f3ee',
-        'secondary-foreground':'#44403c',
-
-        // ── Muted ────────────────────────────────────────────────────────────
+        // ── Themed surfaces (CSS variables — change with theme) ──────────────
+        background:            'rgb(var(--color-background) / <alpha-value>)',
+        foreground:            'rgb(var(--color-foreground) / <alpha-value>)',
+        card: {
+          DEFAULT:             'rgb(var(--color-card) / <alpha-value>)',
+          foreground:          'rgb(var(--color-card-foreground) / <alpha-value>)',
+        },
+        secondary: {
+          DEFAULT:             'rgb(var(--color-secondary) / <alpha-value>)',
+          foreground:          'rgb(var(--color-secondary-foreground) / <alpha-value>)',
+        },
         muted: {
-          DEFAULT:    '#ede9e3',
-          foreground: '#78716c',                    // Stone 500
+          DEFAULT:             'rgb(var(--color-muted) / <alpha-value>)',
+          foreground:          'rgb(var(--color-muted-foreground) / <alpha-value>)',
         },
+        border:                'rgb(var(--color-border) / <alpha-value>)',
+        input:                 'rgb(var(--color-input) / <alpha-value>)',
+        ring:                  'rgb(var(--color-ring) / <alpha-value>)',
 
-        // ── Structural ───────────────────────────────────────────────────────
-        border: '#ddd7cf',
-        input:  '#c9c1b7',
-        ring:   '#c8940f',
+        // ── Primary accent (CSS variable) ─────────────────────────────────────
+        primary:               'rgb(var(--color-primary) / <alpha-value>)',
+        'primary-foreground':  'rgb(var(--color-primary-foreground) / <alpha-value>)',
 
-        // ── Brand navy (sidebar uses its own hex, these are for in-content) ──
-        navy: {
-          DEFAULT: '#1e3a8a',
-          dark:    '#0e1d4a',
-          light:   '#2563eb',
-          muted:   '#3b82f6',
-        },
-
-        // ── Gold (decorative / auth panel) ───────────────────────────────────
-        golden: {
-          DEFAULT: '#c8940f',
-          light:   '#e8a820',
-          pale:    '#fef3c7',
-        },
+        // ── Olive / golden — aliases for primary (backward compat) ────────────
+        // All existing text-olive, bg-olive/20, border-olive/30 etc. automatically
+        // pick up the active theme's primary color.
         olive: {
-          DEFAULT: '#c8940f',
-          light:   '#e8a820',
+          DEFAULT:             'rgb(var(--color-primary) / <alpha-value>)',
+          light:               'rgb(var(--color-primary-light) / <alpha-value>)',
+        },
+        golden: {
+          DEFAULT:             'rgb(var(--color-primary) / <alpha-value>)',
+          light:               'rgb(var(--color-primary-light) / <alpha-value>)',
+          pale:                'rgb(var(--color-cream) / <alpha-value>)',
         },
 
-        // ── Brand accent — Plum ──────────────────────────────────────────────
-        plum: {
-          DEFAULT: '#8e3168',
-          light:   '#b04d88',
-          dark:    '#6b2450',
-          pale:    '#f5e6f0',
-        },
-
-        // ── Brand accent — Cyan ──────────────────────────────────────────────
-        cyan: {
-          brand:   '#4cb8d7',
-          light:   '#7ecce3',
-          dark:    '#2d9ab8',
-          pale:    '#e6f7fb',
-        },
-
-        // ── Sidebar blue (used as bg token reference in layout) ──────────────
-        sidebar: {
-          DEFAULT: '#1a2d52',
-          light:   '#243d6e',
-          dark:    '#111e38',
-          border:  'rgba(255,255,255,0.07)',
-        },
-
-        // ── Cream (for AuthLayout gradient) ──────────────────────────────────
+        // ── Page gradient tints ────────────────────────────────────────────────
         cream: {
-          DEFAULT: '#faf6f0',
-          dark:    '#f0ebe2',
+          DEFAULT:             'rgb(var(--color-cream) / <alpha-value>)',
+          dark:                'rgb(var(--color-cream-dark) / <alpha-value>)',
+        },
+
+        // ── Static brand colors (sidebar, accents — not themed) ───────────────
+        navy: {
+          DEFAULT:             '#1e3a8a',
+          dark:                '#0e1d4a',
+          light:               '#2563eb',
+          muted:               '#3b82f6',
+        },
+        plum: {
+          DEFAULT:             '#8e3168',
+          light:               '#b04d88',
+          dark:                '#6b2450',
+          pale:                '#f5e6f0',
+        },
+        'cyan-brand': {
+          DEFAULT:             '#4cb8d7',
+          light:               '#7ecce3',
+          dark:                '#2d9ab8',
+          pale:                '#e6f7fb',
+        },
+        sidebar: {
+          DEFAULT:             '#1a2d52',
+          light:               '#243d6e',
+          dark:                '#111e38',
+          border:              'rgba(255,255,255,0.07)',
         },
       },
       fontFamily: {

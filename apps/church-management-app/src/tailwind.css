@@ -4,6 +4,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme CSS variables (RGB channels — supports Tailwind opacity modifiers) ── */
+:root {
+  /* Surfaces */
+  --color-background:           245 242 237;   /* warm off-white */
+  --color-foreground:           28 25 23;
+  --color-card:                 255 255 255;
+  --color-card-foreground:      28 25 23;
+  --color-secondary:            247 243 238;
+  --color-secondary-foreground: 68 64 60;
+  --color-muted:                237 233 227;
+  --color-muted-foreground:     120 113 108;
+
+  /* Borders */
+  --color-border:               221 215 207;
+  --color-input:                201 193 183;
+
+  /* Primary — Gold (default) */
+  --color-primary:              200 148 15;    /* #c8940f */
+  --color-primary-light:        232 168 32;    /* #e8a820 */
+  --color-primary-foreground:   255 255 255;
+  --color-ring:                 200 148 15;
+
+  /* Page gradient tints */
+  --color-cream:                250 246 240;
+  --color-cream-dark:           240 235 226;
+}
+
 @layer base {
   * {
     border-color: theme('colors.border');

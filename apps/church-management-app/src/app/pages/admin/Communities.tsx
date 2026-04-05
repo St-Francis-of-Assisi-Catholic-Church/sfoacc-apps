@@ -39,7 +39,7 @@ export default function AdminCommunities() {
         setAllItems(r.data?.items ?? []);
         if (manual) toast.success('Communities refreshed');
       })
-      .catch(err => { if (manual) toastApiError(err, 'Failed to refresh'); })
+      .catch(err => toastApiError(err, 'Failed to load'))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, [client]);
 
@@ -59,11 +59,11 @@ export default function AdminCommunities() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => load(filters.churchUnit ? Number(filters.churchUnit) : undefined, true)} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={() => load(filters.churchUnit ? Number(filters.churchUnit) : undefined, true)} disabled={refreshing} title="Refresh">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
+            <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
           </Button>
-          <Button size="sm"><Plus className="w-3.5 h-3.5" /> Add Community</Button>
+          <Button size="sm" title="Add Community"><Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Community</span></Button>
         </div>
       </div>
 
@@ -76,7 +76,7 @@ export default function AdminCommunities() {
         onViewModeChange={setViewMode}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
       {loading ? (
         viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -131,10 +131,10 @@ export default function AdminCommunities() {
       ) : (
 
         // ── Table view ──
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 border-b border-border">
+            <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm border-b border-border z-10">
+              <tr>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Community</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Church Unit</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Members</th>

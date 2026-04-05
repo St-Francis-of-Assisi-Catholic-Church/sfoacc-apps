@@ -1,97 +1,92 @@
-import { Plus } from 'lucide-react';
-import { Button, Badge } from '../components/ui';
-import type { BadgeProps } from '../components/ui';
+import { useEffect, useState } from 'react';
+import { useSDK } from '../contexts/SDKContext';
+import { useAuth } from '../contexts/AuthContext';
+import { toastApiError } from '../utils/apiError';
+import { BookOpen } from 'lucide-react';
 
-const SACRAMENTS = [
-  { id: 1, type: 'Baptism', recipient: 'Baby Emmanuel Chukwu', date: '2026-03-22', minister: 'Fr. Anthony Eze', status: 'scheduled' },
-  { id: 2, type: 'Confirmation', recipient: 'Miss Ada Nwosu', date: '2026-04-12', minister: 'Bishop Michael Obi', status: 'scheduled' },
-  { id: 3, type: 'Marriage', recipient: 'Mr. Emeka & Miss Chioma Adeyemi', date: '2026-04-18', minister: 'Fr. Anthony Eze', status: 'scheduled' },
-  { id: 4, type: 'Baptism', recipient: 'Baby Grace Okafor', date: '2026-03-01', minister: 'Fr. Peter Nwankwo', status: 'completed' },
-  { id: 5, type: 'Holy Orders', recipient: 'Deacon James Uche', date: '2026-02-15', minister: 'Archbishop Samuel', status: 'completed' },
-  { id: 6, type: 'Anointing of the Sick', recipient: 'Mr. Felix Ogbu', date: '2026-03-10', minister: 'Fr. Anthony Eze', status: 'completed' },
-];
-
-const typeIcons: Record<string, string> = {
-  Baptism: '💧',
-  Confirmation: '🕊️',
-  Marriage: '💍',
-  'Holy Orders': '✝️',
-  'Anointing of the Sick': '🙏',
-  'First Communion': '🍞',
-};
-
-const typeVariant: Record<string, BadgeProps['variant']> = {
-  Baptism: 'outline',
-  Confirmation: 'default',
-  Marriage: 'warning',
-  'Holy Orders': 'secondary',
-  'Anointing of the Sick': 'success',
+const TYPE_META: Record<string, { icon: string; color: string }> = {
+  'Baptism':              { icon: '💧', color: 'text-sky-700   bg-sky-50   border-sky-200'   },
+  'First Communion':      { icon: '🍞', color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  'Confirmation':         { icon: '🕊️', color: 'text-violet-700 bg-violet-50 border-violet-200' },
+  'Penance':              { icon: '🙏', color: 'text-green-700 bg-green-50 border-green-200' },
+  'Anointing of the Sick':{ icon: '✝️', color: 'text-orange-700 bg-orange-50 border-orange-200' },
+  'Holy Orders':          { icon: '⛪', color: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
+  'Holy Matrimony':       { icon: '💍', color: 'text-rose-700  bg-rose-50  border-rose-200'  },
 };
 
 export default function Sacraments() {
+  const client = useSDK();
+  const { selectedUnit } = useAuth();
+  const [distribution, setDistribution] = useState<Record<string, number>>({});
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const params = selectedUnit?.id ? { church_unit_id: selectedUnit.id } : {};
+    client.getParishionerStats(params)
+      .then(r => {
+        if (r.data) {
+          setDistribution(r.data.sacraments_distribution ?? {});
+          setTotal(r.data.total_parishioners ?? 0);
+        }
+      })
+      .catch(err => toastApiError(err, 'Failed to load sacrament stats'))
+      .finally(() => setLoading(false));
+  }, [client, selectedUnit?.id]);
+
+  const entries = Object.entries(distribution).sort((a, b) => b[1] - a[1]);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Sacraments</h1>
-          <p className="text-sm text-muted-foreground mt-1">Track and manage sacramental records</p>
-        </div>
-        <Button size="sm">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Record Sacrament</span>
-        </Button>
+      <div>
+        <h1 className="text-2xl font-display font-bold text-foreground">Sacraments</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Sacramental records{selectedUnit ? ` · ${selectedUnit.name}` : ''}
+        </p>
       </div>
 
-      {/* Summary icons */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-        {Object.entries(typeIcons).map(([type, icon]) => (
-          <div key={type} className="bg-card border border-border rounded-xl p-3 text-center hover:border-olive/30 transition-colors">
-            <span className="text-2xl">{icon}</span>
-            <p className="text-xs font-medium text-muted-foreground mt-1 leading-tight">{type}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Records table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="font-display font-semibold text-base text-foreground">Recent Records</h2>
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(7)].map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-xl p-5 h-28 animate-pulse" />
+          ))}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/30 border-b border-border">
-              <tr>
-                {['Sacrament', 'Recipient', 'Date', 'Minister', 'Status', ''].map(h => (
-                  <th key={h} className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {SACRAMENTS.map(s => (
-                <tr key={s.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span>{typeIcons[s.type] ?? '✝️'}</span>
-                      <Badge variant={typeVariant[s.type] ?? 'default'}>{s.type}</Badge>
+      ) : entries.length === 0 ? (
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <BookOpen className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No sacrament data available.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {entries.map(([type, count]) => {
+              const meta = TYPE_META[type] ?? { icon: '✝️', color: 'text-muted-foreground bg-muted border-border' };
+              const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+              return (
+                <div key={type} className={`border rounded-xl p-5 ${meta.color}`}>
+                  <div className="text-2xl mb-2">{meta.icon}</div>
+                  <p className="text-2xl font-bold leading-none">{count.toLocaleString()}</p>
+                  <p className="text-sm font-medium mt-1 leading-tight">{type}</p>
+                  {total > 0 && (
+                    <div className="mt-2.5">
+                      <div className="h-1 rounded-full bg-current opacity-20 overflow-hidden">
+                        <div className="h-full rounded-full bg-current" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-xs mt-1 opacity-60">{pct}% of parishioners</p>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 font-medium text-foreground text-sm">{s.recipient}</td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-foreground">{s.minister}</td>
-                  <td className="px-6 py-4">
-                    <Badge variant={s.status === 'completed' ? 'success' : 'warning'}>{s.status}</Badge>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-sm text-olive hover:text-olive-light font-medium">View</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {total > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Based on {total.toLocaleString()} registered parishioner{total !== 1 ? 's' : ''}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ interface AdminAuthContextValue {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  hasPermission: (perm: string) => boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
 }
@@ -19,6 +20,13 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem('admin_user');
     return stored ? JSON.parse(stored) : null;
   });
+
+  const hasPermission = useCallback((perm: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    if (!user.permissions) return true;
+    return user.permissions.includes(perm);
+  }, [user]);
 
   const login = useCallback((newToken: string, newUser: User) => {
     localStorage.setItem('admin_token', newToken);
@@ -35,7 +43,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AdminAuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, logout }}>
+    <AdminAuthContext.Provider value={{ user, token, isAuthenticated: !!token, hasPermission, login, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

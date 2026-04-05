@@ -214,7 +214,7 @@ export default function AdminLeadership() {
         setLeaders(Array.isArray(r.data) ? r.data : []);
         if (manual) toast.success('Leadership refreshed');
       })
-      .catch(err => { if (manual) toastApiError(err, 'Failed to refresh'); })
+      .catch(err => toastApiError(err, 'Failed to load'))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, [client, selectedUnit, currentOnly]);
 
@@ -250,12 +250,12 @@ export default function AdminLeadership() {
           <p className="text-sm text-muted-foreground mt-0.5">{leaders.length} leader{leaders.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing} title="Refresh">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
+            <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
           </Button>
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="w-3.5 h-3.5" /> Add Leader
+          <Button size="sm" onClick={openAdd} title="Add Leader">
+            <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Leader</span>
           </Button>
         </div>
       </div>
@@ -284,8 +284,7 @@ export default function AdminLeadership() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex-1 min-h-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col">
           {loading ? (
             <div className="p-10 text-center text-sm text-muted-foreground animate-pulse">Loading leadership…</div>
           ) : leaders.length === 0 ? (
@@ -294,9 +293,10 @@ export default function AdminLeadership() {
               <p className="text-sm text-muted-foreground">No leadership records found.</p>
             </div>
           ) : (
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40 border-b border-border">
+              <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm border-b border-border z-10">
+                <tr>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Leader</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Role</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Contact</th>
@@ -364,8 +364,8 @@ export default function AdminLeadership() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
-        </div>
       </div>
 
       <LeadershipModal

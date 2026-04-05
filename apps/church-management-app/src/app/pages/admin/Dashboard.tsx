@@ -4,7 +4,7 @@ import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useAppConfig } from '../../contexts/AppConfigContext';
 import {
   Building2, Users, Users2, BookMarked,
-  CheckCircle, Clock, ShieldCheck, ChevronRight, MapPin,
+  ShieldCheck, ChevronRight, MapPin,
   Server, RefreshCw, Activity, BarChart3, DollarSign,
   Heart, Zap, UserCheck, IdCard, TrendingUp,
 } from 'lucide-react';
@@ -12,12 +12,10 @@ import type { ChurchUnit } from '@sfoacc/sdk';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
-  RadialBarChart, RadialBar,
 } from 'recharts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ParishStats = Awaited<ReturnType<ReturnType<typeof useSDK>['getParishionerStats']>>['data'];
 type HealthData = Awaited<ReturnType<ReturnType<typeof useSDK>['getSystemHealth']>>;
 type AuditEntry = NonNullable<Awaited<ReturnType<ReturnType<typeof useSDK>['getAuditLogs']>>['data']>['items'][number];
 type RegistrationStats = Awaited<ReturnType<ReturnType<typeof useSDK>['getRegistrationStats']>>['data'];
@@ -28,6 +26,16 @@ type Tab = 'system' | 'demographics' | 'societies' | 'communities' | 'sacraments
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 const PALETTE = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
+
+const SACRAMENT_META: Record<string, { icon: string; palette: string; bg: string; text: string; border: string }> = {
+  'Baptism':              { icon: '💧', palette: '#0ea5e9', bg: 'bg-sky-50',    text: 'text-sky-700',    border: 'border-sky-200' },
+  'First Communion':      { icon: '🍞', palette: '#f59e0b', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200' },
+  'Confirmation':         { icon: '🕊️', palette: '#8b5cf6', bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
+  'Penance':              { icon: '🙏', palette: '#10b981', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200' },
+  'Anointing of the Sick':{ icon: '✝️', palette: '#f97316', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+  'Holy Orders':          { icon: '⛪', palette: '#4f46e5', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+  'Holy Matrimony':       { icon: '💍', palette: '#ec4899', bg: 'bg-rose-50',   text: 'text-rose-700',   border: 'border-rose-200' },
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,9 +55,11 @@ function distToChartData(dist: Record<string, number> | undefined) {
   return Object.entries(dist).map(([name, value]) => ({ name, value }));
 }
 
-function topNDist(dist: Record<string, number> | undefined, n: number) {
-  if (!dist) return [];
-  return Object.entries(dist).sort((a, b) => b[1] - a[1]).slice(0, n).map(([name, value]) => ({ name, value }));
+function stackedByGender(byGender: Record<string, Record<string, number>> | undefined) {
+  if (!byGender) return [];
+  const male = byGender['male'] ?? {};
+  const female = byGender['female'] ?? {};
+  return Object.keys(male).map(k => ({ name: k, male: male[k] ?? 0, female: female[k] ?? 0 }));
 }
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) => {
@@ -74,6 +84,18 @@ const PieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ n
   );
 };
 
+const MultiTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; fill: string }>; label?: string }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
+      {label && <p className="font-semibold text-foreground mb-1">{label}</p>}
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.fill }}>{p.name}: {p.value.toLocaleString()}</p>
+      ))}
+    </div>
+  );
+};
+
 function ChartCard({ title, icon: Icon, children, className = '' }: { title: string; icon: React.ElementType; children: React.ReactNode; className?: string }) {
   return (
     <div className={`bg-card border border-border rounded-xl p-5 ${className}`}>
@@ -94,33 +116,6 @@ function HealthDot({ status }: { status: string }) {
     return <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 inline-block" />;
   return <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 inline-block" />;
 }
-
-// ── Unit selector bar ──────────────────────────────────────────────────────────
-
-function UnitSelector({ units, selectedUnitId, onChange }: { units: ChurchUnit[]; selectedUnitId: number | null; onChange: (id: number | null) => void }) {
-  const filtered = units.filter(u => u.type !== 'outstation');
-  if (filtered.length === 0) return null;
-  return (
-    <div className="flex items-center gap-2 flex-wrap mb-5">
-      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-1">Filter by unit:</span>
-      <button
-        onClick={() => onChange(null)}
-        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${selectedUnitId === null ? 'bg-navy text-white border-navy' : 'border-border text-muted-foreground hover:text-foreground hover:border-navy/30'}`}
-      >
-        All (Parish)
-      </button>
-      {filtered.map(u => (
-        <button key={u.id} onClick={() => onChange(u.id)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${selectedUnitId === u.id ? 'bg-navy text-white border-navy' : 'border-border text-muted-foreground hover:text-foreground hover:border-navy/30'}`}
-        >
-          {u.name}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Stats loading skeleton ─────────────────────────────────────────────────────
 
 function ChartSkeleton({ cols = 3 }: { cols?: number }) {
   return (
@@ -147,13 +142,8 @@ export default function AdminDashboard() {
   const [societies, setSocieties] = useState(-1);
   const [communities, setCommunities] = useState(-1);
   const [totalParishioners, setTotalParishioners] = useState(-1);
-  const [verifiedParishioners, setVerifiedParishioners] = useState(-1);
   const [churchUnits, setChurchUnits] = useState<ChurchUnit[]>([]);
   const [expandedParishes, setExpandedParishes] = useState<Set<number>>(new Set());
-
-  const [parishStats, setParishStats] = useState<ParishStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null);
 
   const [health, setHealth] = useState<HealthData | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);
@@ -169,15 +159,6 @@ export default function AdminDashboard() {
   const [stationStats, setStationStats] = useState<StationStats | null>(null);
   const [stationStatsLoading, setStationStatsLoading] = useState(true);
 
-  const loadStats = useCallback((unitId: number | null) => {
-    setStatsLoading(true);
-    const params = unitId ? { church_unit_id: unitId } : {};
-    client.getParishionerStats(params)
-      .then(r => setParishStats(r.data))
-      .catch(() => setParishStats(null))
-      .finally(() => setStatsLoading(false));
-  }, [client]);
-
   const loadHealth = useCallback((quiet = false) => {
     if (quiet) setHealthRefreshing(true); else setHealthLoading(true);
     client.getSystemHealth()
@@ -188,7 +169,7 @@ export default function AdminDashboard() {
 
   const loadActivity = useCallback(() => {
     setActivityLoading(true);
-    client.getAuditLogs({ limit: 8 })
+    client.getAuditLogs({ limit: 3 })
       .then(r => setRecentActivity(r.data?.items ?? []))
       .catch(() => setRecentActivity([]))
       .finally(() => setActivityLoading(false));
@@ -205,54 +186,45 @@ export default function AdminDashboard() {
       client.listParishioners({ limit: 1, skip: 0 }).then(r => setTotalParishioners(r.data?.total ?? 0)).catch(() => setTotalParishioners(0));
     });
 
-    client.listParishioners({ limit: 1, skip: 0, verification_status: 'verified' as never }).then(r => {
-      setVerifiedParishioners(r.data?.total ?? 0);
-    }).catch(() => setVerifiedParishioners(0));
-
     client.listChurchUnits({ limit: 100 }).then(r => {
       const units = r.data?.items ?? [];
       setChurchUnits(units);
       setExpandedParishes(new Set(units.filter(u => u.type === 'parish').map(u => u.id)));
     }).catch(() => setChurchUnits([]));
 
-    loadStats(null);
     loadHealth();
     loadActivity();
     client.getRegistrationStats().then(r => setRegistrationStats(r.data)).catch(() => setRegistrationStats(null)).finally(() => setRegistrationLoading(false));
     client.getDashboardSystemStats().then(r => setSystemDashStats(r.data)).catch(() => setSystemDashStats(null)).finally(() => setSystemDashLoading(false));
     client.getDashboardStationStats().then(r => setStationStats(r.data)).catch(() => setStationStats(null)).finally(() => setStationStatsLoading(false));
-  }, [client, loadStats, loadHealth, loadActivity]);
+  }, [client, loadHealth, loadActivity]);
 
-  useEffect(() => { loadStats(selectedUnitId); }, [selectedUnitId, loadStats]);
-
-  const verifiedPct = totalParishioners > 0 ? Math.round((verifiedParishioners / totalParishioners) * 100) : 0;
   const now = new Date();
   const dateStr = `${DAY_NAMES[now.getDay()]}, ${now.getDate()} ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
   const firstName = user?.full_name?.split(' ')[0] ?? 'Admin';
 
-  // Chart data
-  const genderData = distToChartData(parishStats?.gender_distribution);
-  const ageData = distToChartData(parishStats?.age_group_distribution);
-  const maritalData = distToChartData(parishStats?.marital_status_distribution);
-  const sacramentData = distToChartData(parishStats?.sacraments_distribution);
-  const topSocieties = topNDist(parishStats?.society_distribution, 10);
-  const communityData = topNDist(parishStats?.church_community_distribution, 8);
-
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'system',       label: 'System',            icon: Server      },
-    { id: 'demographics', label: 'Demographics',      icon: Users       },
-    { id: 'societies',    label: 'Societies',          icon: BookMarked  },
-    { id: 'communities',  label: 'Communities',        icon: Users2      },
-    { id: 'sacraments',   label: 'Sacraments',         icon: Heart       },
-    { id: 'registration', label: 'Registration',       icon: UserCheck   },
-    { id: 'financials',   label: 'Financials',         icon: DollarSign  },
+    { id: 'system',       label: 'System',        icon: Server      },
+    { id: 'demographics', label: 'Demographics',   icon: Users       },
+    { id: 'societies',    label: 'Societies',      icon: BookMarked  },
+    { id: 'communities',  label: 'Communities',    icon: Users2      },
+    { id: 'sacraments',   label: 'Sacraments',     icon: Heart       },
+    { id: 'registration', label: 'Registration',   icon: UserCheck   },
+    { id: 'financials',   label: 'Financials',     icon: DollarSign  },
   ];
+
+  const unavailable = (
+    <div className="bg-card border border-border rounded-xl p-8 text-center">
+      <BarChart3 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+      <p className="text-sm text-muted-foreground">Statistics unavailable.</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
 
       {/* ── Welcome card ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#7c5a2a] via-[#a07840] to-[#c9a057] border border-white/[0.07] p-7 shadow-lg">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#7c5a2a] via-[#a07840] to-[#c9a057] border border-white/[0.07] p-4 sm:p-7 shadow-lg">
         <div className="absolute inset-0 pointer-events-none opacity-40" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(148,163,184,0.06) 1px, transparent 0)',
           backgroundSize: '24px 24px',
@@ -277,9 +249,9 @@ export default function AdminDashboard() {
         </div>
         <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/[0.07]">
           {[
-            { label: 'Outstations', value: outstations },
-            { label: 'Societies', value: societies },
-            { label: 'Communities', value: communities },
+            { label: 'Outstations',  value: outstations },
+            { label: 'Societies',    value: societies },
+            { label: 'Communities',  value: communities },
             { label: 'Parishioners', value: totalParishioners },
           ].map(({ label, value }) => (
             <div key={label}>
@@ -316,11 +288,9 @@ export default function AdminDashboard() {
 
           {/* Recent Activity */}
           <div className="bg-card border border-border rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-muted-foreground" />
-                <h2 className="font-semibold text-foreground text-sm">Recent Activity</h2>
-              </div>
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-4 h-4 text-muted-foreground" />
+              <h2 className="font-semibold text-foreground text-sm">Recent Activity</h2>
             </div>
             {activityLoading ? (
               <p className="text-sm text-muted-foreground animate-pulse">Loading…</p>
@@ -445,7 +415,6 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Overall status row */}
                 <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
                   <div>
                     <div className="flex items-center gap-1.5">
@@ -460,7 +429,6 @@ export default function AdminDashboard() {
                     {health.timestamp ? new Date(health.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
                   </p>
                 </div>
-                {/* Services */}
                 {health.services && Object.entries(health.services).map(([name, svc]) => (
                   <div key={name} className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -507,7 +475,6 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <>
-                {/* Church Hierarchy */}
                 <div className="bg-card border border-border rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -515,10 +482,10 @@ export default function AdminDashboard() {
                   </div>
                   <div className="space-y-2">
                     {[
-                      { label: 'Parishes', value: systemDashStats.church_hierarchy.total_parishes },
+                      { label: 'Parishes',    value: systemDashStats.church_hierarchy.total_parishes },
                       { label: 'Outstations', value: systemDashStats.church_hierarchy.total_outstations },
                       { label: 'Total Units', value: systemDashStats.church_hierarchy.total_units },
-                      { label: 'Active', value: systemDashStats.church_hierarchy.active_units },
+                      { label: 'Active',      value: systemDashStats.church_hierarchy.active_units },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">{label}</span>
@@ -527,7 +494,6 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-                {/* Mass Services */}
                 <div className="bg-card border border-border rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <BookMarked className="w-4 h-4 text-muted-foreground" />
@@ -536,7 +502,7 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     {[
                       { label: 'Total Schedules', value: systemDashStats.mass_services.total_schedules },
-                      { label: 'Active', value: systemDashStats.mass_services.active_schedules },
+                      { label: 'Active',           value: systemDashStats.mass_services.active_schedules },
                       ...Object.entries(systemDashStats.mass_services.by_mass_type).map(([k, v]) => ({ label: k.charAt(0).toUpperCase() + k.slice(1), value: v })),
                     ].map(({ label, value }) => (
                       <div key={label} className="flex items-center justify-between">
@@ -546,7 +512,6 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-                {/* Users & Access */}
                 <div className="bg-card border border-border rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Users className="w-4 h-4 text-muted-foreground" />
@@ -569,7 +534,6 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </div>
-                {/* Communications */}
                 <div className="bg-card border border-border rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Activity className="w-4 h-4 text-muted-foreground" />
@@ -601,216 +565,413 @@ export default function AdminDashboard() {
 
       {/* ── Tab: Demographics ── */}
       {activeTab === 'demographics' && (
-        <div>
-          <UnitSelector units={churchUnits} selectedUnitId={selectedUnitId} onChange={setSelectedUnitId} />
-          {statsLoading ? <ChartSkeleton cols={2} /> : !parishStats ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center">
-              <BarChart3 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Statistics unavailable.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-5">
+        <div className="space-y-5">
+          {stationStatsLoading ? <ChartSkeleton cols={2} /> : !stationStats ? unavailable : (() => {
+            const genderRec = stationStats.demographics.gender; // Record<string, number>
+            const genderPieData = Object.entries(genderRec).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
+            const totalDemog = Object.values(genderRec).reduce((s, v) => s + v, 0);
+            const maritalData = distToChartData(stationStats.demographics.marital_status?.total);
+            const ageStackedData = stackedByGender(stationStats.demographics.age_groups?.by_gender);
+            const birthDayData = distToChartData(stationStats.demographics.birth_day_of_week?.total);
+            const maritalStackedData = stackedByGender(stationStats.demographics.marital_status?.by_gender);
+            return (
+              <>
+                {/* KPI row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Parishioners', value: stationStats.overview.total_parishioners, color: 'text-foreground' },
+                    { label: 'Male',               value: genderRec['male'] ?? 0,                   color: 'text-sky-600'    },
+                    { label: 'Female',             value: genderRec['female'] ?? 0,                 color: 'text-rose-500'   },
+                    { label: 'Other / Unknown',    value: totalDemog - (genderRec['male'] ?? 0) - (genderRec['female'] ?? 0), color: 'text-slate-500' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-card border border-border rounded-xl p-5 text-center">
+                      <p className={`text-3xl font-bold ${color}`}>{(value ?? 0).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+                    </div>
+                  ))}
+                </div>
 
-              {/* Gender — Donut */}
-              <ChartCard title="Gender Distribution" icon={Users}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={genderData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
-                      {genderData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                    <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground capitalize">{v}</span>} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-              {/* Marital Status — Donut */}
-              <ChartCard title="Marital Status" icon={Users2}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={maritalData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
-                      {maritalData.map((_, i) => <Cell key={i} fill={PALETTE[(i + 2) % PALETTE.length]} />)}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                    <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground capitalize">{v}</span>} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-              {/* Age Groups — Bar (full width) */}
-              <ChartCard title="Age Groups" icon={BarChart3} className="sm:col-span-2">
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={ageData} barSize={36}>
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={35} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {ageData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-             
-
-              {/* Birth Day of Week — Bar (from stationStats, full width) */}
-              {stationStats && !stationStatsLoading && (() => {
-                const birthDayData = distToChartData(stationStats.demographics.birth_day_of_week.total);
-                return birthDayData.length > 0 ? (
-                  <ChartCard title="Birth Day of Week" icon={BarChart3} className="sm:col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {/* Gender donut */}
+                  <ChartCard title="Gender Distribution" icon={Users}>
                     <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={birthDayData} barSize={36}>
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={35} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {birthDayData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                        </Bar>
-                      </BarChart>
+                      <PieChart>
+                        <Pie data={genderPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
+                          {genderPieData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                        <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground">{v}</span>} />
+                      </PieChart>
                     </ResponsiveContainer>
                   </ChartCard>
-                ) : null;
-              })()}
 
-            </div>
-          )}
+                  {/* Marital status donut */}
+                  <ChartCard title="Marital Status" icon={Users2}>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={maritalData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
+                          {maritalData.map((_, i) => <Cell key={i} fill={PALETTE[(i + 2) % PALETTE.length]} />)}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                        <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground capitalize">{v}</span>} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+
+                  {/* Age groups stacked by gender */}
+                  {ageStackedData.length > 0 && (
+                    <ChartCard title="Age Groups by Gender" icon={BarChart3} className="sm:col-span-2">
+                      <ResponsiveContainer width="100%" height={240}>
+                        <BarChart data={ageStackedData} barSize={28}>
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={40} />
+                          <Tooltip content={<MultiTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                          <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground capitalize">{v}</span>} />
+                          <Bar dataKey="male" name="Male" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="female" name="Female" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  )}
+
+                  {/* Marital status by gender stacked */}
+                  {maritalStackedData.length > 0 && (
+                    <ChartCard title="Marital Status by Gender" icon={Users2} className="sm:col-span-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={maritalStackedData} barSize={28}>
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={40} />
+                          <Tooltip content={<MultiTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                          <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground capitalize">{v}</span>} />
+                          <Bar dataKey="male" name="Male" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="female" name="Female" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  )}
+
+                  {/* Birth day of week */}
+                  {birthDayData.length > 0 && (
+                    <ChartCard title="Birth Day of Week" icon={BarChart3} className="sm:col-span-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={birthDayData} barSize={36}>
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={35} />
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                            {birthDayData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
       {/* ── Tab: Societies ── */}
       {activeTab === 'societies' && (
-        <div>
-          <UnitSelector units={churchUnits} selectedUnitId={selectedUnitId} onChange={setSelectedUnitId} />
-          {statsLoading ? <ChartSkeleton cols={1} /> : !parishStats ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center">
-              <BarChart3 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Statistics unavailable.</p>
-            </div>
-          ) : (
-            <div className="space-y-5">
+        <div className="space-y-5">
+          {stationStatsLoading ? <ChartSkeleton cols={1} /> : !stationStats ? unavailable : (() => {
+            const soc = stationStats.societies;
+            const sorted = Object.entries(soc.by_society ?? {})
+              .map(([name, v]) => ({
+                society_name: name,
+                total_members: v.total_members,
+                male: v.by_gender['male'] ?? 0,
+                female: v.by_gender['female'] ?? 0,
+                active: v.by_membership_status['active'] ?? 0,
+                inactive: v.by_membership_status['inactive'] ?? 0,
+              }))
+              .sort((a, b) => b.total_members - a.total_members);
+            const top15 = sorted.slice(0, 15).map(s => ({ name: s.society_name, value: s.total_members }));
+            const totalMembers = sorted.reduce((sum, s) => sum + s.total_members, 0);
+            return (
+              <>
+                {/* KPI */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Societies',    value: soc.total_societies,         suffix: '',  color: 'text-foreground' },
+                    { label: 'Society Members',    value: totalMembers,                 suffix: '',  color: 'text-indigo-600' },
+                    { label: 'Society Coverage',   value: soc.society_coverage_pct,    suffix: '%', color: 'text-emerald-600' },
+                    { label: 'Societies w/ Members', value: sorted.filter(s => s.total_members > 0).length, suffix: '', color: 'text-sky-600' },
+                  ].map(({ label, value, suffix, color }) => (
+                    <div key={label} className="bg-card border border-border rounded-xl p-5 text-center">
+                      <p className={`text-3xl font-bold ${color}`}>{(value ?? 0).toLocaleString()}{suffix}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+                    </div>
+                  ))}
+                </div>
 
-              {/* Summary */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { label: 'Total Societies',           value: parishStats.total_societies,                 suffix: '' },
-                  { label: 'Parishioners in Societies', value: parishStats.parishioners_in_societies,       suffix: '' },
-                  { label: 'Without a Society',         value: parishStats.parishioners_without_society,   suffix: '' },
-                  { label: 'Society Coverage',          value: stationStats?.societies.society_coverage_pct ?? 0, suffix: '%' },
-                ].map(({ label, value, suffix }) => (
-                  <div key={label} className="bg-card border border-border rounded-xl p-5 text-center">
-                    <p className="text-3xl font-bold text-foreground">{(value ?? 0).toLocaleString()}{suffix}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{label}</p>
+                {/* Top societies chart */}
+                <ChartCard title="Top Societies by Members" icon={BookMarked}>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={top15} barSize={24}>
+                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} angle={-20} textAnchor="end" height={50} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={35} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        {top15.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+
+                {/* Full societies table */}
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground">All Societies ({sorted.length})</h3>
                   </div>
-                ))}
-              </div>
-
-              {/* Top societies bar */}
-              <ChartCard title="Top Societies by Members" icon={BookMarked}>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={topSocieties} barSize={32}>
-                    <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={35} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {topSocieties.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-            </div>
-          )}
+                  <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm border-b border-border">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">#</th>
+                          <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Society</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide text-sky-600">Male</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide text-rose-500">Female</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide text-emerald-600">Active</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Inactive</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {sorted.map((s, i) => (
+                          <tr key={s.society_name} className="hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-2.5 text-muted-foreground/50">{i + 1}</td>
+                            <td className="px-4 py-2.5 font-medium text-foreground">{s.society_name}</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-foreground">{s.total_members.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-sky-600">{s.male.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-rose-500">{s.female.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-emerald-600">{s.active.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-muted-foreground">{s.inactive.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
       {/* ── Tab: Communities ── */}
       {activeTab === 'communities' && (
-        <div>
-          <UnitSelector units={churchUnits} selectedUnitId={selectedUnitId} onChange={setSelectedUnitId} />
-          {statsLoading ? <ChartSkeleton cols={1} /> : !parishStats ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center">
-              <BarChart3 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Statistics unavailable.</p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-card border border-border rounded-xl p-5 text-center">
-                  <p className="text-3xl font-bold text-foreground">{(parishStats.total_church_communities ?? 0).toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Total Communities</p>
+        <div className="space-y-5">
+          {stationStatsLoading ? <ChartSkeleton cols={1} /> : !stationStats ? unavailable : (() => {
+            const comm = stationStats.church_communities;
+            const sorted = Object.entries(comm.by_community ?? {})
+              .map(([name, v]) => ({
+                community_name: name,
+                total_members: v.total_members,
+                male: v.by_gender['male'] ?? 0,
+                female: v.by_gender['female'] ?? 0,
+                married: v.by_marital_status['married'] ?? 0,
+                single: v.by_marital_status['single'] ?? 0,
+                widowed: v.by_marital_status['widowed'] ?? 0,
+                other: (v.by_marital_status['other'] ?? 0) + (v.by_marital_status['divorced'] ?? 0),
+              }))
+              .sort((a, b) => b.total_members - a.total_members);
+            const chartData = sorted.map(c => ({ name: c.community_name, value: c.total_members }));
+            const totalMembers = sorted.reduce((sum, c) => sum + c.total_members, 0);
+            return (
+              <>
+                {/* KPI */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Communities',    value: comm.total_communities,       suffix: '',  color: 'text-foreground' },
+                    { label: 'Community Members',    value: totalMembers,                  suffix: '',  color: 'text-indigo-600' },
+                    { label: 'Community Coverage',   value: comm.community_coverage_pct,  suffix: '%', color: 'text-emerald-600' },
+                    { label: 'Communities w/ Members', value: sorted.filter(c => c.total_members > 0).length, suffix: '', color: 'text-sky-600' },
+                  ].map(({ label, value, suffix, color }) => (
+                    <div key={label} className="bg-card border border-border rounded-xl p-5 text-center">
+                      <p className={`text-3xl font-bold ${color}`}>{(value ?? 0).toLocaleString()}{suffix}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="bg-card border border-border rounded-xl p-5 text-center">
-                  <p className="text-3xl font-bold text-foreground">{communityData.length}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Communities with Members</p>
+
+                {/* Horizontal bar chart */}
+                <ChartCard title="Community Distribution" icon={Users2}>
+                  <ResponsiveContainer width="100%" height={Math.max(260, sorted.length * 36)}>
+                    <BarChart data={chartData} layout="vertical" barSize={18}>
+                      <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={140} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                        {chartData.map((_, i) => <Cell key={i} fill={PALETTE[(i + 1) % PALETTE.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartCard>
+
+                {/* Communities detail table */}
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground">Community Breakdown ({sorted.length})</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/90 border-b border-border">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Community</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide text-sky-600">Male</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide text-rose-500">Female</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Married</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Single</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Widowed</th>
+                          <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground uppercase tracking-wide">Other</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {sorted.map(c => (
+                          <tr key={c.community_name} className="hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-2.5 font-medium text-foreground">{c.community_name}</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-foreground">{c.total_members.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-sky-600">{c.male.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-rose-500">{c.female.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-muted-foreground">{c.married.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-muted-foreground">{c.single.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-muted-foreground">{c.widowed.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-muted-foreground">{c.other.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-
-              <ChartCard title="Community Distribution" icon={Users2}>
-                <ResponsiveContainer width="100%" height={Math.max(260, communityData.length * 36)}>
-                  <BarChart data={communityData} layout="vertical" barSize={18}>
-                    <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={130} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {communityData.map((_, i) => <Cell key={i} fill={PALETTE[(i + 1) % PALETTE.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-
-            </div>
-          )}
+              </>
+            );
+          })()}
         </div>
       )}
 
       {/* ── Tab: Sacraments ── */}
       {activeTab === 'sacraments' && (
-        <div>
-          <UnitSelector units={churchUnits} selectedUnitId={selectedUnitId} onChange={setSelectedUnitId} />
-          {statsLoading ? <ChartSkeleton cols={1} /> : !parishStats ? (
-            <div className="bg-card border border-border rounded-xl p-8 text-center">
-              <BarChart3 className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Statistics unavailable.</p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-
-              {/* Sacrament summary tiles */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {sacramentData.map(({ name, value }, i) => {
-                  const pct = stationStats?.sacraments?.[name]?.percentage;
-                  return (
-                    <div key={name} className="bg-card border border-border rounded-xl p-4 text-center">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center mx-auto mb-2" style={{ background: `${PALETTE[i % PALETTE.length]}18` }}>
-                        <Heart className="w-4 h-4" style={{ color: PALETTE[i % PALETTE.length] }} />
+        <div className="space-y-5">
+          {stationStatsLoading ? <ChartSkeleton cols={2} /> : !stationStats ? unavailable : (() => {
+            const sacEntries = Object.entries(stationStats.sacraments ?? {});
+            const genderBarData = sacEntries.map(([name, d]) => ({
+              name: name.replace('Anointing of the Sick', 'Anointing').replace('Holy ', ''),
+              Male: d.by_gender?.['male'] ?? 0,
+              Female: d.by_gender?.['female'] ?? 0,
+            }));
+            return (
+              <>
+                {/* Stat tiles */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {sacEntries.map(([name, data]) => {
+                    const meta = SACRAMENT_META[name] ?? { icon: '✝️', palette: '#6366f1', bg: 'bg-muted', text: 'text-muted-foreground', border: 'border-border' };
+                    const maleCount = data.by_gender?.['male'] ?? 0;
+                    const femaleCount = data.by_gender?.['female'] ?? 0;
+                    const total = maleCount + femaleCount;
+                    const malePct = total > 0 ? Math.round((maleCount / total) * 100) : 0;
+                    return (
+                      <div key={name} className={`border rounded-xl p-4 ${meta.bg} ${meta.border}`}>
+                        <div className="text-2xl mb-2">{meta.icon}</div>
+                        <p className={`text-2xl font-bold leading-none ${meta.text}`}>{data.count.toLocaleString()}</p>
+                        <p className={`text-xs font-semibold mt-0.5 ${meta.text} opacity-70`}>{data.percentage?.toFixed(1)}% of parishioners</p>
+                        <p className={`text-sm font-medium mt-1 leading-tight ${meta.text}`}>{name}</p>
+                        {total > 0 && (
+                          <div className="mt-2.5 space-y-1">
+                            <div className="flex justify-between text-[10px] opacity-60">
+                              <span>♂ {maleCount}</span>
+                              <span>♀ {femaleCount}</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-current opacity-20 overflow-hidden flex">
+                              <div className="h-full bg-sky-500 opacity-80" style={{ width: `${malePct}%` }} />
+                              <div className="h-full bg-rose-400 opacity-80 flex-1" />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-2xl font-bold text-foreground">{value.toLocaleString()}</p>
-                      {pct !== undefined && (
-                        <p className="text-xs font-semibold mt-0.5" style={{ color: PALETTE[i % PALETTE.length] }}>{pct.toFixed(1)}%</p>
-                      )}
-                      <p className="text-[11px] text-muted-foreground mt-1 leading-tight">{name}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {/* Sacraments horizontal bar */}
-              <ChartCard title="Sacraments Coverage" icon={Heart}>
-                <ResponsiveContainer width="100%" height={Math.max(200, sacramentData.length * 40)}>
-                  <BarChart data={sacramentData} layout="vertical" barSize={18}>
-                    <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={130} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {sacramentData.map((_, i) => <Cell key={i} fill={PALETTE[(i + 4) % PALETTE.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
+                {/* Gender stacked bar */}
+                {genderBarData.length > 0 && (
+                  <ChartCard title="Sacraments by Gender" icon={Heart}>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={genderBarData} barSize={22}>
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={40} />
+                        <Tooltip content={<MultiTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                        <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs text-muted-foreground">{v}</span>} />
+                        <Bar dataKey="Male" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Female" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+                )}
 
-            </div>
-          )}
+                {/* Per-sacrament detail cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {sacEntries.map(([name, data], idx) => {
+                    const meta = SACRAMENT_META[name] ?? { icon: '✝️', palette: PALETTE[idx % PALETTE.length], bg: 'bg-card', text: 'text-foreground', border: 'border-border' };
+                    const ageData = Object.entries(data.by_age_group ?? {}).map(([k, v]) => ({ name: k, value: v }));
+                    const topComm = Object.entries(data.by_community ?? {})
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 6)
+                      .map(([community_name, count]) => ({ community_name, count }));
+                    return (
+                      <div key={name} className="bg-card border border-border rounded-xl p-5">
+                        <div className="flex items-center gap-2.5 mb-4">
+                          <span className="text-xl">{meta.icon}</span>
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">{name}</h3>
+                            <p className="text-xs text-muted-foreground">{data.count.toLocaleString()} recipients · {data.percentage?.toFixed(1)}%</p>
+                          </div>
+                        </div>
+
+                        {ageData.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">By Age Group</p>
+                            <ResponsiveContainer width="100%" height={100}>
+                              <BarChart data={ageData} barSize={16}>
+                                <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <YAxis hide />
+                                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                                <Bar dataKey="value" fill={meta.palette} radius={[3, 3, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+
+                        {topComm.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Top Communities</p>
+                            <div className="space-y-1.5">
+                              {topComm.map(c => {
+                                const pct = data.count > 0 ? (c.count / data.count) * 100 : 0;
+                                return (
+                                  <div key={c.community_name}>
+                                    <div className="flex items-center justify-between mb-0.5">
+                                      <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">{c.community_name}</span>
+                                      <span className="text-[10px] font-medium text-foreground ml-2 shrink-0">{c.count}</span>
+                                    </div>
+                                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta.palette }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -834,12 +995,12 @@ export default function AdminDashboard() {
               {/* Summary tiles */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
-                  { label: 'Total Parishioners', value: registrationStats.total_parishioners, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
-                  { label: 'Verified', value: registrationStats.total_verified, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-                  { label: 'Pending Verification', value: registrationStats.total_pending_verification, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
-                  { label: 'Unverified', value: registrationStats.total_unverified, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100' },
-                  { label: 'With Church ID', value: registrationStats.total_with_new_church_id, color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-100' },
-                  { label: 'Without Church ID', value: registrationStats.total_without_new_church_id, color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' },
+                  { label: 'Total Parishioners',    value: registrationStats.total_parishioners,          color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+                  { label: 'Verified',               value: registrationStats.total_verified,             color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+                  { label: 'Pending Verification',   value: registrationStats.total_pending_verification, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+                  { label: 'Unverified',             value: registrationStats.total_unverified,           color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100' },
+                  { label: 'With Church ID',         value: registrationStats.total_with_new_church_id,  color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-100' },
+                  { label: 'Without Church ID',      value: registrationStats.total_without_new_church_id, color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' },
                 ].map(({ label, value, color, bg, border }) => (
                   <div key={label} className={`bg-card border ${border} rounded-xl p-5 text-center`}>
                     <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center mx-auto mb-2`}>
@@ -850,6 +1011,23 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
+
+              {/* Station overview */}
+              {stationStats && !stationStatsLoading && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Active',              value: stationStats.overview.active,                   suffix: '' },
+                    { label: 'Deceased',            value: stationStats.overview.deceased,                 suffix: '' },
+                    { label: 'Verification Rate',   value: stationStats.overview.verification_rate_pct,   suffix: '%' },
+                    { label: 'Church ID Coverage',  value: stationStats.overview.church_id_coverage_pct,  suffix: '%' },
+                  ].map(({ label, value, suffix }) => (
+                    <div key={label} className="bg-card border border-border rounded-xl p-4 text-center">
+                      <p className="text-xl font-bold text-foreground">{value}{suffix}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Verification funnel */}
               <div className="bg-card border border-border rounded-xl p-5">
@@ -862,9 +1040,9 @@ export default function AdminDashboard() {
                 </div>
                 <div className="space-y-3">
                   {[
-                    { label: 'Verified', value: registrationStats.total_verified, total: registrationStats.total_parishioners, color: 'bg-emerald-500', textColor: 'text-emerald-600' },
+                    { label: 'Verified',            value: registrationStats.total_verified,             total: registrationStats.total_parishioners, color: 'bg-emerald-500', textColor: 'text-emerald-600' },
                     { label: 'Pending Verification', value: registrationStats.total_pending_verification, total: registrationStats.total_parishioners, color: 'bg-amber-400', textColor: 'text-amber-600' },
-                    { label: 'Unverified', value: registrationStats.total_unverified, total: registrationStats.total_parishioners, color: 'bg-red-400', textColor: 'text-red-500' },
+                    { label: 'Unverified',           value: registrationStats.total_unverified,          total: registrationStats.total_parishioners, color: 'bg-red-400', textColor: 'text-red-500' },
                   ].map(({ label, value, total, color, textColor }) => {
                     const pct = total > 0 ? (value / total) * 100 : 0;
                     return (
@@ -896,7 +1074,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="space-y-3">
                   {[
-                    { label: 'Assigned', value: registrationStats.total_with_new_church_id, total: registrationStats.total_parishioners, color: 'bg-sky-500', textColor: 'text-sky-600' },
+                    { label: 'Assigned',     value: registrationStats.total_with_new_church_id,    total: registrationStats.total_parishioners, color: 'bg-sky-500', textColor: 'text-sky-600' },
                     { label: 'Not Assigned', value: registrationStats.total_without_new_church_id, total: registrationStats.total_parishioners, color: 'bg-slate-300', textColor: 'text-slate-500' },
                   ].map(({ label, value, total, color, textColor }) => {
                     const pct = total > 0 ? (value / total) * 100 : 0;
@@ -917,23 +1095,6 @@ export default function AdminDashboard() {
                   })}
                 </div>
               </div>
-
-              {/* Station overview if available */}
-              {stationStats && !stationStatsLoading && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Active', value: stationStats.overview.active },
-                    { label: 'Deceased', value: stationStats.overview.deceased },
-                    { label: 'Verification Rate', value: `${stationStats.overview.verification_rate_pct}%` },
-                    { label: 'Church ID Coverage', value: `${stationStats.overview.church_id_coverage_pct}%` },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="bg-card border border-border rounded-xl p-4 text-center">
-                      <p className="text-xl font-bold text-foreground">{value}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </>
           )}
         </div>

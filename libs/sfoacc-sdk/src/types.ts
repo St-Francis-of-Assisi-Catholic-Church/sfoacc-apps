@@ -21,6 +21,23 @@ export interface PagedData<T> {
 export type PagedResponse<T> = APIResponse<PagedData<T>>;
 
 
+// ── Message templates ──────────────────────────────────────────────────────
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  content: string | null;
+  description: string | null;
+  is_system: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface MessageTemplatesResponse {
+  templates: MessageTemplate[];
+  available_variables: Array<{ name: string; description: string }>;
+}
+
 // ── Generated schema types ───────────────────────────────────────────────────
 
 
@@ -93,6 +110,29 @@ export interface ChurchCommunityUpdate {
   is_active?: boolean | null;
 }
 
+export interface EventRecurrence {
+  frequency: "daily" | "weekly" | "monthly";
+  day_of_week?: number | null;
+  recurrence_end_date?: string | null;
+}
+
+export interface EventMessageCreate {
+  message_type: "reminder" | "announcement" | "note";
+  title: string;
+  content: string;
+  scheduled_at?: string | null;
+}
+
+export interface EventMessageRead {
+  id: number;
+  event_id: number;
+  message_type: "reminder" | "announcement" | "note";
+  title: string;
+  content: string;
+  scheduled_at?: string | null;
+  created_at: string;
+}
+
 export interface ChurchEventCreate {
   name: string;
   description?: string | null;
@@ -101,6 +141,8 @@ export interface ChurchEventCreate {
   end_time?: string | null;
   location?: string | null;
   is_public?: boolean;
+  church_unit_id?: number | null;
+  recurrence?: EventRecurrence | null;
 }
 
 export interface ChurchEventUpdate {
@@ -228,10 +270,15 @@ export type LifeStatus = "alive" | "deceased" | "unknown";
 
 export type LoginMethod = "password" | "email_otp" | "sms_otp";
 
+export type LoginRouting = 'super_admin' | 'unit_dashboard' | 'unit_selection' | 'no_access';
+
 export interface LoginResponse {
   access_token: string;
   token_type?: string;
   user: User;
+  routing?: LoginRouting;
+  accessible_units?: ChurchUnitSummary[];
+  default_unit?: ChurchUnitSummary | null;
 }
 
 export type MaritalStatus = "single" | "married" | "widowed" | "divorced" | "separated";
@@ -486,6 +533,7 @@ export interface User {
   login_method?: LoginMethod;
   role?: string | null;
   role_label?: string | null;
+  permissions?: string[];
   church_unit_id?: number | null;
   church_unit_name?: string | null;
   unit_memberships: ChurchUnitSummary[];
@@ -627,6 +675,7 @@ export interface LeadershipRead {
 export interface ChurchEventRead {
   id: number;
   church_unit_id: number;
+  church_unit_name?: string | null;
   name: string;
   description?: string | null;
   event_date: string;
@@ -634,8 +683,34 @@ export interface ChurchEventRead {
   end_time?: string | null;
   location?: string | null;
   is_public: boolean;
+  is_recurring?: boolean;
+  is_active?: boolean;
+  recurrence_frequency?: string | null;
+  recurrence_day_of_week?: number | null;
+  recurrence_end_date?: string | null;
+  terminated_at?: string | null;
+  message_count?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface EventsPagedData {
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  events: ChurchEventRead[];
+}
+
+export interface EventListParams {
+  church_unit_id?: number;
+  is_recurring?: boolean;
+  active_only?: boolean;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
 }
 
 export interface SocietyLeadershipRead {

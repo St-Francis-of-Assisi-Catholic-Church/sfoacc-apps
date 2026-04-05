@@ -29,6 +29,10 @@ import type {
   ChurchEventCreate,
   ChurchEventUpdate,
   ChurchEventRead,
+  EventListParams,
+  EventsPagedData,
+  EventMessageCreate,
+  EventMessageRead,
   Society,
   SocietyCreate,
   SocietyUpdate,
@@ -79,17 +83,21 @@ export interface SFOACCClientConfig {
   token?: string;
   /** Called when the API returns a 401 (e.g. token expired) */
   onUnauthorized?: () => void;
+  /** Scope all requests to this church unit via X-Church-Unit-Id header */
+  unitId?: number;
 }
 
 export class SFOACCClient {
   private baseUrl: string;
   private token: string | null;
   private onUnauthorized?: () => void;
+  private unitId: number | undefined;
 
   constructor(config: SFOACCClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.token = config.token ?? null;
     this.onUnauthorized = config.onUnauthorized;
+    this.unitId = config.unitId;
   }
 
   setToken(token: string | null) {
@@ -100,10 +108,15 @@ export class SFOACCClient {
     return this.token;
   }
 
+  setUnitId(id: number | undefined) {
+    this.unitId = id;
+  }
+
   private get headers(): HeadersInit {
     return {
       "Content-Type": "application/json",
       ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      ...(this.unitId ? { "X-Church-Unit-Id": String(this.unitId) } : {}),
     };
   }
 
@@ -426,8 +439,20 @@ export class SFOACCClient {
     return this.request(`/api/v1/societies/${id}`, { method: "DELETE" });
   }
 
-  getSocietyMembers(id: number): Promise<APIResponse<SocietyMember[]>> {
-    return this.request(`/api/v1/societies/${id}/members`);
+  async getSocietyMembers(id: number): Promise<APIResponse<SocietyMember[]>> {
+    const PAGE = 100;
+    let skip = 0;
+    const all: SocietyMember[] = [];
+    while (true) {
+      const res: APIResponse<SocietyMember[] | { items?: SocietyMember[]; total?: number }> =
+        await this.request(`/api/v1/societies/${id}/members${this.buildQuery({ limit: PAGE, skip })}`);
+      const raw = res.data;
+      const page: SocietyMember[] = Array.isArray(raw) ? raw : ((raw as { items?: SocietyMember[] })?.items ?? []);
+      all.push(...page);
+      if (page.length < PAGE) break;
+      skip += PAGE;
+    }
+    return { data: all } as APIResponse<SocietyMember[]>;
   }
 
   addSocietyMembers(
@@ -453,7 +478,7 @@ export class SFOACCClient {
   // ── Church Communities ────────────────────────────────────────────────────
 
   listCommunities(
-    params: PaginationParams & { search?: string } = {}
+    params: PaginationParams & { search?: string; church_unit_id?: number } = {}
   ): Promise<PagedResponse<ChurchCommunity>> {
     return this.request(
       `/api/v1/church-community/all${this.buildQuery(params)}`
@@ -464,8 +489,40 @@ export class SFOACCClient {
     return this.request(`/api/v1/church-community/${id}`);
   }
 
-  getCommunityMembers(id: number): Promise<APIResponse<Record<string, unknown>[]>> {
-    return this.request(`/api/v1/church-community/${id}/members`);
+  async getCommunityMembers(id: number): Promise<APIResponse<Record<string, unknown>[]>> {
+    const PAGE = 100;
+    let skip = 0;
+    const all: Record<string, unknown>[] = [];
+    while (true) {
+      const res: APIResponse<Record<string, unknown>[] | { items?: Record<string, unknown>[]; total?: number }> =
+        await this.request(`/api/v1/church-community/${id}/members${this.buildQuery({ limit: PAGE, skip })}`);
+      const raw = res.data;
+      const page: Record<string, unknown>[] = Array.isArray(raw) ? raw : ((raw as { items?: Record<string, unknown>[] })?.items ?? []);
+      all.push(...page);
+      if (page.length < PAGE) break;
+      skip += PAGE;
+    }
+    return { data: all } as APIResponse<Record<string, unknown>[]>;
+  }
+
+  addCommunityMembers(
+    id: number,
+    members: Array<{ parishioner_id: string; date_joined?: string }>
+  ): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/church-community/${id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ members }),
+    });
+  }
+
+  removeCommunityMembers(
+    id: number,
+    parishioner_ids: string[]
+  ): Promise<APIResponse<null>> {
+    return this.request(`/api/v1/church-community/${id}/members`, {
+      method: "DELETE",
+      body: JSON.stringify({ parishioner_ids }),
+    });
   }
 
   createCommunity(
@@ -581,17 +638,66 @@ export class SFOACCClient {
     });
   }
 
+  sendBatchVerification(data: {
+    parishioner_ids?: string[];
+    send_to_all_unverified?: boolean;
+    channel?: "email" | "sms" | "both";
+    church_unit_id?: number;
+  }): Promise<APIResponse<{
+    total: number;
+    sent: number;
+    skipped: number;
+    details: Array<{ parishioner_id: string; status: "sent" | "skipped"; reason?: string }>;
+  }>> {
+    return this.request("/api/v1/parishioners/verify/batch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   sendBulkMessage(data: {
     parishioner_ids: string[];
     channel?: "email" | "sms" | "both";
     custom_message?: string | null;
     template?: string;
     subject?: string | null;
+    event_name?: string | null;
+    event_date?: string | null;
+    event_time?: string | null;
   }): Promise<APIResponse<unknown>> {
     return this.request("/api/v1/bulk-message/send", {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  listMessageTemplates(): Promise<APIResponse<import("./types").MessageTemplatesResponse>> {
+    return this.request("/api/v1/bulk-message/templates");
+  }
+
+  createMessageTemplate(data: {
+    name: string;
+    content: string;
+    description?: string | null;
+  }): Promise<APIResponse<import("./types").MessageTemplate>> {
+    return this.request("/api/v1/bulk-message/templates", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  updateMessageTemplate(
+    id: string,
+    data: { name?: string; content?: string; description?: string | null }
+  ): Promise<APIResponse<import("./types").MessageTemplate>> {
+    return this.request(`/api/v1/bulk-message/templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  deleteMessageTemplate(id: string): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/bulk-message/templates/${id}`, { method: "DELETE" });
   }
 
   updateParishionerFamily(
@@ -719,8 +825,18 @@ export class SFOACCClient {
     return this.request("/api/v1/sacraments/all");
   }
 
-  getSacrament(id: number): Promise<APIResponse<unknown>> {
+  getSacrament(id: number | string): Promise<APIResponse<unknown>> {
     return this.request(`/api/v1/sacraments/${id}`);
+  }
+
+  updateSacrament(
+    id: number | string,
+    data: { type?: string; date?: string | null; place?: string | null; minister?: string | null }
+  ): Promise<APIResponse<unknown>> {
+    return this.request(`/api/v1/sacraments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   }
 
   // ── Admin Settings ─────────────────────────────────────────────────────────
@@ -876,6 +992,11 @@ export class SFOACCClient {
     total_without_new_church_id: number;
   }>> {
     return this.request("/api/v1/statistics/registration");
+  }
+
+  /** Parishioner data-quality breakdown — missing church IDs, unverified records, etc. */
+  getDataQuality(): Promise<APIResponse<Record<string, unknown>>> {
+    return this.request("/api/v1/parishioners/data-quality");
   }
 
   /** System-level dashboard stats — hierarchy, mass services, users, communications. */
@@ -1134,6 +1255,28 @@ export class SFOACCClient {
 
   deleteUnitEvent(unitId: number, id: number): Promise<APIResponse<null>> {
     return this.request(`/api/v1/parish/units/${unitId}/events/${id}`, { method: "DELETE" });
+  }
+
+  // ── Global Events API ────────────────────────────────────────────────────────
+
+  listEvents(params: EventListParams = {}): Promise<APIResponse<EventsPagedData>> {
+    return this.request(`/api/v1/events${this.buildQuery(params)}`);
+  }
+
+  createEvent(data: ChurchEventCreate): Promise<APIResponse<ChurchEventRead>> {
+    return this.request(`/api/v1/events`, { method: "POST", body: JSON.stringify(data) });
+  }
+
+  terminateEvent(id: number): Promise<APIResponse<ChurchEventRead>> {
+    return this.request(`/api/v1/events/${id}/terminate`, { method: "POST" });
+  }
+
+  addEventMessage(id: number, data: EventMessageCreate): Promise<APIResponse<EventMessageRead>> {
+    return this.request(`/api/v1/events/${id}/messages`, { method: "POST", body: JSON.stringify(data) });
+  }
+
+  listEventMessages(id: number): Promise<APIResponse<EventMessageRead[]>> {
+    return this.request(`/api/v1/events/${id}/messages`);
   }
 
   // ── Emergency Contacts ──────────────────────────────────────────────────────

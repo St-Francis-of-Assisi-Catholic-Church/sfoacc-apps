@@ -139,7 +139,7 @@ export default function AdminRoles() {
         if (p.status === 'fulfilled') setPermissions(Array.isArray(p.value.data) ? p.value.data : []);
         if (manual) toast.success('Roles refreshed');
       })
-      .catch(err => { if (manual) toastApiError(err, 'Failed to refresh'); })
+      .catch(err => toastApiError(err, 'Failed to load'))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, [client]);
 
@@ -167,9 +167,9 @@ export default function AdminRoles() {
           <h1 className="font-display text-xl font-bold text-foreground">Roles & Permissions</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{roles.length} role{roles.length !== 1 ? 's' : ''} · {permissions.length} permissions</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing}>
+        <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing} title="Refresh">
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
         </Button>
       </div>
 
@@ -285,7 +285,7 @@ function RoleRow({ role, onEdit }: { role: RoleRead; onEdit: (r: RoleRead) => vo
       <td className="px-5 py-3.5 text-right">
         <Button variant="ghost" size="sm" onClick={() => onEdit(role)}
           className="opacity-0 group-hover:opacity-100 transition-opacity gap-1.5">
-          <Pencil className="w-3 h-3" /> Permissions
+          <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">Permissions</span>
         </Button>
       </td>
     </tr>

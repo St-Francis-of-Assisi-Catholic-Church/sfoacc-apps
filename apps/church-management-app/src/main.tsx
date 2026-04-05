@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './app/contexts/AuthContext';
 import { AdminAuthProvider } from './app/contexts/AdminAuthContext';
 import { SDKProvider } from './app/contexts/SDKContext';
 import { AppConfigProvider } from './app/contexts/AppConfigContext';
+import { ThemeProvider } from './app/contexts/ThemeContext';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -24,9 +25,9 @@ function ScrollToTop() {
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 function RegularSDKProvider({ children }: { children: ReactNode }) {
-  const { logout } = useAuth();
+  const { logout, selectedUnit } = useAuth();
   return (
-    <SDKProvider baseUrl={API_BASE_URL} onUnauthorized={logout}>
+    <SDKProvider baseUrl={API_BASE_URL} unitId={selectedUnit?.id} onUnauthorized={logout}>
       {children}
     </SDKProvider>
   );
@@ -47,6 +48,7 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <StrictMode>
+    <ThemeProvider>
     <AppConfigProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
@@ -67,5 +69,6 @@ root.render(
         </BrowserRouter>
       </QueryClientProvider>
     </AppConfigProvider>
+    </ThemeProvider>
   </StrictMode>
 );

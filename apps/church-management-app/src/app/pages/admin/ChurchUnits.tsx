@@ -27,7 +27,7 @@ export default function AdminChurchUnits() {
       setItems(combined.filter(u => { if (seen.has(u.id)) return false; seen.add(u.id); return true; }));
       if (manual) toast.success('Church units refreshed');
     }).catch(err => {
-      if (manual) toastApiError(err, 'Failed to refresh');
+      toastApiError(err, 'Failed to load church units');
     }).finally(() => { setLoading(false); setRefreshing(false); });
   }, [client]);
 
@@ -50,24 +50,24 @@ export default function AdminChurchUnits() {
           <p className="text-sm text-muted-foreground mt-0.5">Manage all parish and outstation units</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing} title="Refresh">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
+            <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
           </Button>
-          <Button size="sm"><Plus className="w-3.5 h-3.5" /> Add Unit</Button>
+          <Button size="sm" title="Add Unit"><Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Unit</span></Button>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex-1 min-h-0 bg-card border border-border rounded-xl overflow-hidden flex flex-col">
           {loading ? (
             <div className="p-8 text-center text-sm text-muted-foreground animate-pulse">Loading church units…</div>
           ) : items.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">No church units found.</div>
           ) : (
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40 border-b border-border">
+              <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm border-b border-border z-10">
+                <tr>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Name</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Location</th>
@@ -150,8 +150,8 @@ export default function AdminChurchUnits() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
-        </div>
       </div>
     </div>
   );

@@ -67,7 +67,7 @@ export default function AuthLayout() {
       </div>
 
       {/* Right form panel */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-cream via-background to-cream-dark relative">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-cream via-background to-cream-dark relative">
         {/* Subtle top accent */}
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-olive/20 to-transparent" />
 
@@ -82,7 +82,7 @@ export default function AuthLayout() {
           </div>
 
           {/* Card */}
-          <div className="bg-card rounded-2xl shadow-xl border border-border p-8">
+          <div className="bg-card rounded-2xl shadow-xl border border-border p-5 sm:p-8">
             <Outlet />
           </div>
 
