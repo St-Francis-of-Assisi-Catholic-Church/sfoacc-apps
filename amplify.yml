@@ -9,7 +9,7 @@ applications:
           commands:
             - yarn nx build church-management-app
       artifacts:
-        baseDirectory: apps/church-management-app/dist
+        baseDirectory: dist
         files:
           - '**/*'
       cache:
