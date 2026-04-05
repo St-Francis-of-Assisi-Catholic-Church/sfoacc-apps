@@ -7,7 +7,7 @@ applications:
             - cd ../.. && yarn install --frozen-lockfile
         build:
           commands:
-            - cd ../.. && npx nx build church-management-app
+            - cd ../.. && yarn nx build church-management-app
       artifacts:
         baseDirectory: dist
         files:
