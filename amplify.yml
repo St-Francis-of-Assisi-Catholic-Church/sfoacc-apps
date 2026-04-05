@@ -4,15 +4,15 @@ applications:
       phases:
         preBuild:
           commands:
-            - cd $CODEBUILD_SRC_DIR && yarn install --frozen-lockfile
+            - cd ../.. && yarn install --frozen-lockfile
         build:
           commands:
-            - cd $CODEBUILD_SRC_DIR && npx nx build church-management-app
+            - cd ../.. && npx nx build church-management-app
       artifacts:
         baseDirectory: dist
         files:
           - '**/*'
       cache:
         paths:
-          - $CODEBUILD_SRC_DIR/node_modules/**/*
+          - ../../node_modules/**/*
     appRoot: apps/church-management-app
